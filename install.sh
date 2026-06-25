@@ -3,9 +3,11 @@
 # Copies a hardening variant into a target repo, wires hooks, prints next steps.
 #
 # Usage:
-#   ./install.sh <ts|js|go|python|polyglot> [target-dir]
+#   ./install.sh <ts|js|go|python|polyglot|google> [target-dir]
 #
 #   target-dir defaults to the current directory.
+#   `google` installs the governance layer (CODEOWNERS, Dependabot, CodeQL,
+#   branch-protection + Google-grade docs) — layer it on top of a language variant.
 #   Existing files are NOT overwritten unless you pass FORCE=1.
 set -euo pipefail
 
@@ -15,7 +17,7 @@ TARGET="${2:-$(pwd)}"
 FORCE="${FORCE:-0}"
 
 if [ -z "$VARIANT" ]; then
-  echo "usage: install.sh <ts|js|go|python|polyglot> [target-dir]" >&2
+  echo "usage: install.sh <ts|js|go|python|polyglot|google> [target-dir]" >&2
   exit 2
 fi
 if [ ! -d "$TARGET" ]; then
@@ -47,6 +49,15 @@ install_shared_node() {
   copy "$KIT/shared/.github/scripts/check-baseline-shrinkage.sh" ".github/scripts/check-baseline-shrinkage.sh"
   copy "$KIT/shared/eslint-plugin-template" "packages/eslint-plugin"
   chmod +x "$TARGET/.husky/pre-commit" "$TARGET/.github/scripts/"*.sh 2>/dev/null || true
+}
+
+install_governance() {
+  copy "$KIT/.github/CODEOWNERS" ".github/CODEOWNERS"
+  copy "$KIT/.github/dependabot.yml" ".github/dependabot.yml"
+  copy "$KIT/.github/workflows/codeql.yml" ".github/workflows/codeql.yml"
+  copy "$KIT/docs/BRANCH_PROTECTION.md" "docs/BRANCH_PROTECTION.md"
+  copy "$KIT/GOOGLE_GRADE.md" "GOOGLE_GRADE.md"
+  copy "$KIT/DAL_POLICY.md" "DAL_POLICY.md"
 }
 
 case "$VARIANT" in
@@ -87,6 +98,10 @@ case "$VARIANT" in
     copy "$KIT/polyglot/.gitleaks.toml" ".gitleaks.toml"
     copy "$KIT/polyglot/ci.yml" ".github/workflows/ci.yml"
     NEXT='pipx install pre-commit && pre-commit install && pre-commit run --all-files. Paste per-lang jobs from go/python ci.snippet.yml into .github/workflows/ci.yml'
+    ;;
+  google)
+    install_governance
+    NEXT='Edit .github/CODEOWNERS, then enforce: see docs/BRANCH_PROTECTION.md. Layer this on top of a language variant (run install.sh <ts|js|go|python|polyglot> too).'
     ;;
   *)
     echo "unknown variant: $VARIANT (use ts|js|go|python|polyglot)" >&2

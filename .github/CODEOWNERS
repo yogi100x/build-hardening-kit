@@ -1,0 +1,15 @@
+# CODEOWNERS — directory-level review ownership (Google's OWNERS model).
+# Combined with branch protection (require review from Code Owners), nothing
+# merges into an owned path without an owner's approval.
+# Syntax: <path>  <@owner> [@owner2] [@team]
+#
+# Last match wins. Replace the placeholders with real users/teams.
+
+# Default owner for everything:
+*                       @your-org/maintainers
+
+# Examples — narrow ownership for sensitive areas:
+# /packages/eslint-plugin/   @your-org/platform
+# /dal/                      @your-org/data
+# /.github/                  @your-org/devops
+# *.sql                      @your-org/data

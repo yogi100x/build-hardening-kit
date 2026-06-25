@@ -1,8 +1,17 @@
 # build-hardening-kit
 
-Portable build-quality gates extracted from the SwiftHyre monorepo. Two variants — **`ts/`** (TypeScript) and **`js/`** (plain JavaScript). Everything in **`shared/`** is variant-agnostic.
+Portable build-quality gates extracted from the SwiftHyre monorepo. Variants: **`ts/`** (TypeScript), **`js/`** (plain JavaScript), **`go/`**, **`python/`**, **`polyglot/`**. Everything in **`shared/`** is variant-agnostic. The **Google-grade governance layer** (review process + CODEOWNERS + dependency/SAST automation) is in **`GOOGLE_GRADE.md`** + **`.github/`** + **`docs/BRANCH_PROTECTION.md`**.
 
-The goal: make a green build *mean something*. Lint blocks bad patterns, typecheck blocks type bugs (yes, even on JS), a custom plugin blocks project-specific footguns, and a **baseline-ratchet** drives existing debt to zero without blocking new work.
+The goal: make a green build *mean something*. Lint blocks bad patterns, typecheck blocks type bugs (yes, even on JS), a custom plugin blocks project-specific footguns (raw DB queries outside the DAL — see `DAL_POLICY.md`), a **baseline-ratchet** drives existing debt to zero, and — with the governance layer — bad code physically cannot merge.
+
+## Quick apply
+
+```bash
+./install.sh ts        # or js | go | python | polyglot
+./install.sh google    # governance layer, on top of any language variant
+```
+
+Full picture: **kit** (automated presubmit) + **`GOOGLE_GRADE.md`** (review process, distilled from [google/eng-practices](https://github.com/google/eng-practices) + [Software Engineering at Google](https://abseil.io/resources/swe-book)) + **`go/python/polyglot`** (other stacks).
 
 ---
 
