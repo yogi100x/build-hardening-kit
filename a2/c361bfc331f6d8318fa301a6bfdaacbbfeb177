@@ -1,0 +1,19 @@
+install.sh
+  s_95bc5fb7fb954d::t_31cf5d0f6a1f9a 1-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.3",
+  "base_commit_sha": "a2c361bfc331f6d8318fa301a6bfdaacbbfeb177",
+  "prompts": {},
+  "sessions": {
+    "s_95bc5fb7fb954d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5af051da-764a-48d5-94c4-1a39e81c1151",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "Yogi <yogi100x@gmail.com>"
+    }
+  }
+}
