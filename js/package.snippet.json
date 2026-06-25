@@ -1,0 +1,23 @@
+{
+  "_comment": "Merge into your root package.json. typescript is still a devDep — it powers the checkJs typecheck on plain .js.",
+  "scripts": {
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write \"**/*.{js,jsx,json,md,css}\"",
+    "typecheck": "tsc --noEmit -p jsconfig.json",
+    "baseline:generate": "node packages/eslint-plugin/scripts/generate-baseline.mjs",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "**/*.{js,jsx,mjs,cjs}": ["eslint --fix --max-warnings=0"],
+    "**/*.{js,jsx,json,md,css}": ["prettier --write"]
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "typescript": "^5.7.2",
+    "prettier": "^3.4.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7"
+  }
+}

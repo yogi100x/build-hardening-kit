@@ -1,0 +1,46 @@
+# golangci-lint config (v1.x schema). For v2 add `version: "2"` and nest under top keys.
+# golangci-lint bundles 50+ linters — this is Go's ESLint-plugin equivalent in one binary.
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - govet # suspicious constructs
+    - staticcheck # the big one: bugs, perf, simplifications
+    - errcheck # unchecked errors
+    - ineffassign # ineffectual assignments
+    - unused # dead code
+    - revive # style + custom rules (golint successor)
+    - gosec # security scanner
+    - gocritic # opinionated checks + RULEGUARD host (see rules.go)
+    - bodyclose # unclosed HTTP bodies
+    - rowserrcheck # unchecked sql.Rows.Err
+    - sqlclosecheck # unclosed sql.Rows/Stmt
+    - errorlint # wrong error wrapping
+    - nilerr # returning nil after err check
+    - gci # deterministic import order
+    - misspell
+
+linters-settings:
+  govet:
+    enable-all: true
+  gci:
+    sections:
+      - standard
+      - default
+      - prefix(github.com/yourorg) # <-- set your module path
+  gocritic:
+    enabled-tags: [diagnostic, performance, style]
+    settings:
+      ruleguard:
+        rules: "rules.go" # custom AST rules, see rules.go
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  # RATCHET: only flag issues introduced since main. Existing debt passes —
+  # the built-in equivalent of the baseline JSON in the JS/TS kit.
+  new-from-rev: origin/main
+
+severity:
+  default-severity: error

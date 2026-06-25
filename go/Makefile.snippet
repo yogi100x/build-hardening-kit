@@ -1,0 +1,20 @@
+# Merge into your Makefile. `make check` is the local gate; CI runs the same steps.
+.PHONY: fmt lint vet test build check
+
+fmt:
+	gofmt -l -w .
+	@command -v gofumpt >/dev/null && gofumpt -l -w . || true # stricter, optional
+
+lint:
+	golangci-lint run --new-from-rev=origin/main
+
+vet:
+	go vet ./...
+
+test:
+	go test -race -covermode=atomic ./...
+
+build:
+	go build ./...
+
+check: fmt lint vet test build

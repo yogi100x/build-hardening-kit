@@ -1,0 +1,21 @@
+{
+  "_comment": "checkJs turns tsc into a type-checker for plain .js (with JSDoc). Run via: tsc --noEmit -p jsconfig.json",
+  "compilerOptions": {
+    "checkJs": true,
+    "allowJs": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "resolveJsonModule": true,
+    "noEmit": true
+  },
+  "include": ["src", "apps", "packages"],
+  "exclude": ["node_modules", "dist", "build", ".next"]
+}

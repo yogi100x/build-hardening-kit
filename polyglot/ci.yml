@@ -1,0 +1,41 @@
+# Polyglot CI orchestrator. Paste the go/python jobs from each lang's ci.snippet.yml
+# alongside these two universal jobs. Run all in parallel.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # --- universal: custom rules with cross-language ratchet ---
+  semgrep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: pip install semgrep
+      - name: Semgrep (only NEW findings vs main fail)
+        run: |
+          BASE=$(git merge-base origin/main HEAD)
+          semgrep ci --config semgrep/rules.yml --baseline-commit "$BASE"
+
+  # --- universal: secret scanning ---
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+
+  # --- paste per-language jobs here (see go/ci.snippet.yml, python/ci.snippet.yml) ---
+  # go: ...
+  # python: ...

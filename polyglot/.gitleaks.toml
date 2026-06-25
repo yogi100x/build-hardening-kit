@@ -1,0 +1,7 @@
+# Extends gitleaks' default ruleset. Add [[rules]] blocks for org-specific token shapes.
+[extend]
+useDefault = true
+
+# Allowlist false positives by path or regex:
+# [allowlist]
+#   paths = ["""(.*?)(test|fixture)(.*?)"""]
