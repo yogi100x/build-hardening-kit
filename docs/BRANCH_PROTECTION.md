@@ -1,58 +1,41 @@
-# Branch protection — make the presubmit the arbiter
+# Branch protection — make the checks block merges
 
-The linters and CI mean nothing until failing them **blocks merge**. This is the
-single highest-leverage Google-grade step: "if it's not green, it can't land."
+Linters and CI mean nothing until a failing check **blocks merging**. Hooks on a
+developer's machine can always be skipped; branch protection cannot.
 
-## One-shot setup (gh CLI)
+## With the `governance` module (recommended)
 
-Replace `OWNER/REPO` and the contexts, then run. Contexts are the job names in
-`.github/workflows/hardening.yml` that your stacks and modules created — `node`,
-`python`, `go`, `secrets`, `semgrep` — plus `Analyze (<language>)` from CodeQL.
-Set code owners first (`copier update --trust --data code_owners=@org/team`):
-CODEOWNERS ships commented out without them, and `require_code_owner_reviews`
-with no real owner enforces nothing.
+The kit renders `.github/hardening/protect-branch.sh`. It requires exactly the
+checks your workflows really run — a required check that never reports would
+block every merge — and `copier update` keeps that list current when you add or
+remove stacks and modules.
 
 ```bash
-OWNER_REPO="your-org/your-repo"
-
-gh api -X PUT "repos/$OWNER_REPO/branches/main/protection" \
-  -H "Accept: application/vnd.github+json" \
-  --input - <<'JSON'
-{
-  "required_status_checks": {
-    "strict": true,
-    "contexts": ["node", "secrets", "Analyze (javascript-typescript)"]
-  },
-  "enforce_admins": true,
-  "required_pull_request_reviews": {
-    "required_approving_review_count": 1,
-    "require_code_owner_reviews": true,
-    "dismiss_stale_reviews": true
-  },
-  "required_linear_history": true,
-  "allow_force_pushes": false,
-  "allow_deletions": false,
-  "required_conversation_resolution": true,
-  "restrictions": null
-}
-JSON
+.github/hardening/protect-branch.sh --dry-run   # show the settings, change nothing
+.github/hardening/protect-branch.sh             # apply to this repo's default branch
 ```
 
-## What each setting enforces
+Needs the GitHub CLI (`gh`) signed in with admin rights on the repo. Branch
+protection on a private repo needs a paid GitHub plan; public repos are free.
 
-| Setting | Google practice it encodes |
-|---------|----------------------------|
-| `required_status_checks.strict` | branch must be up-to-date + all checks green before merge (presubmit = arbiter) |
-| `contexts` | the exact CI jobs that must pass — use your real job names |
-| `require_code_owner_reviews` | an OWNER must approve (`.github/CODEOWNERS`) |
-| `required_approving_review_count: 1` | mandatory review — nothing lands unreviewed |
-| `dismiss_stale_reviews` | new commits re-trigger review (no rubber-stamp drift) |
-| `enforce_admins` | rules apply to everyone, including admins |
-| `required_linear_history` | small, clean, revertable history (squash/rebase merges) |
-| `required_conversation_resolution` | review comments must be resolved, not ignored |
+| Setting | Why |
+|---|---|
+| required status checks | every kit job (and each CodeQL language) must pass |
+| `strict: false` | a branch need not be rebased on the latest base first; turn it on (or add a merge queue) once "green on my branch, red on main" happens often |
+| `enforce_admins` | the rules apply to admins too |
+| approving reviews | `required_reviews` (default 1). Working alone? Set it to 0: GitHub does not let you approve your own pull request |
+| code-owner review | only when you named real owners (`code_owners`); a placeholder owner silently enforces nothing |
+| `dismiss_stale_reviews` | new commits need a fresh approval |
+| conversation resolution | review comments must be resolved |
+| no force pushes, no deletion | history on the default branch is permanent |
 
-## Recommended repo settings (UI)
+Change `required_reviews` or `code_owners` with
+`uvx copier update --trust --data required_reviews=0`, then run the script again.
 
-- Settings > General > Pull Requests: enable **"Allow squash merging"** only; **"Automatically delete head branches."** (trunk-based, small CLs)
-- Settings > Code security: enable **Dependabot alerts**, **Dependabot security updates**, **Secret scanning**, **Push protection**, **CodeQL**.
-- Settings > Branches: set the protection rule on `main` (the API call above does this).
+## Recommended repository settings
+
+- Settings > General > Pull Requests: allow squash merging; automatically delete head branches.
+- Settings > Code security: Dependabot alerts and security updates, secret
+  scanning, push protection, CodeQL.
+- To block merges on CodeQL *findings* (not only on the scan running), add a
+  code-scanning merge protection rule under Settings > Rules.

@@ -16,11 +16,12 @@ import yaml
 from harness import KIT, run, tool
 
 SHA = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
-ALL = ["format", "lint", "types", "secrets", "ci", "hooks", "governance", "arch-rules"]
+ALL = ["format", "lint", "types", "secrets", "ci", "hooks", "governance", "agents", "arch-rules"]
 RENDERS = {
     "ts-py-go-all": (["ts", "python", "go"], ALL, {"go_module": "example.com/x"}),
     "js-all": (["js"], ALL, {}),
     "py-owners": (["python"], ALL, {"code_owners": "@acme/core"}),
+    "go-solo": (["go"], ALL, {"code_owners": "@me", "required_reviews": "0"}),
     "ts-minimal": (["ts"], None, {"preset": "minimal"}),
     "ts-pnpm": (["ts"], None, {"node_package_manager": "pnpm"}),
     "py-ci-only": (["python"], ["secrets", "ci"], {}),
@@ -98,10 +99,21 @@ def test_render_contents(rendered: dict[str, Path]) -> None:
         ".semgrep/hardening.yml",
         ".copier-answers.yml",
         ".gitattributes",
+        "AGENTS.md",
+        "CLAUDE.md",
+        ".github/pull_request_template.md",
+        ".github/hardening/protect-branch.sh",
     ]:
         assert (full / rel).is_file(), rel
     minimal = rendered["ts-minimal"]
-    for rel in [".pre-commit-config.yaml", ".github/CODEOWNERS", "tools", ".semgrep"]:
+    for rel in [
+        ".pre-commit-config.yaml",
+        ".github/CODEOWNERS",
+        "tools",
+        ".semgrep",
+        "AGENTS.md",
+        ".github/hardening",
+    ]:
         assert not (minimal / rel).exists(), rel
     assert (minimal / ".github/workflows/hardening.yml").is_file()
 
@@ -227,6 +239,55 @@ def test_docs_cite_only_real_rules() -> None:
     assert "any-requires-justification" not in text
     assert "// WHY:" not in text
     assert "coverage gate |" not in text
+
+
+def protection(root: Path) -> dict:
+    res = run([*tool("bash"), ".github/hardening/protect-branch.sh", "--dry-run"], root)
+    assert res.ok, res.out
+    return json.loads(res.out)
+
+
+def reported_checks(root: Path) -> set[str]:
+    """Check names GitHub will report for the rendered workflows."""
+    names = set(load(root / ".github/workflows/hardening.yml")["jobs"])
+    codeql = load(root / ".github/workflows/codeql.yml")["jobs"]["analyze"]
+    names |= {f"Analyze ({lang})" for lang in codeql["strategy"]["matrix"]["language"]}
+    return names
+
+
+@pytest.mark.parametrize("name", ["ts-py-go-all", "js-all", "py-owners", "go-solo"])
+def test_branch_protection_requires_exactly_the_real_checks(
+    rendered: dict[str, Path], name: str
+) -> None:
+    """A required check that never reports would block every merge forever."""
+    root = rendered[name]
+    body = protection(root)
+    assert set(body["required_status_checks"]["contexts"]) == reported_checks(root)
+    assert body["allow_force_pushes"] is False and body["enforce_admins"] is True
+
+
+def test_branch_protection_review_settings(rendered: dict[str, Path]) -> None:
+    """Solo maintainers can set 0 reviews; owners are required only when real."""
+    owned = protection(rendered["py-owners"])["required_pull_request_reviews"]
+    assert owned == {
+        "required_approving_review_count": 1,
+        "require_code_owner_reviews": True,
+        "dismiss_stale_reviews": True,
+    }
+    blank = protection(rendered["ts-py-go-all"])["required_pull_request_reviews"]
+    assert blank["require_code_owner_reviews"] is False  # no owners named
+    solo = protection(rendered["go-solo"])["required_pull_request_reviews"]
+    assert solo["required_approving_review_count"] == 0
+    assert solo["require_code_owner_reviews"] is False
+
+
+def test_workflows_pass_actionlint_and_zizmor(rendered: dict[str, Path]) -> None:
+    """Kit and rendered workflows: valid (actionlint) and no known-insecure patterns (zizmor)."""
+    paths = [str(p) for p in workflows(rendered)]
+    res = run([*tool("actionlint"), *paths], KIT)
+    assert res.ok, res.out
+    res = run([*tool("zizmor"), "--offline", "--min-severity", "low", *paths], KIT)
+    assert res.ok, res.out
 
 
 def test_no_custom_ratchet_left() -> None:

@@ -20,7 +20,17 @@ Step = Callable[[Repo], None]
 # on the clean repo only; planted cases target the individual steps.
 GateStep = tuple[str, list[str], str]
 
-ALL_MODULES = ["format", "lint", "types", "secrets", "ci", "hooks", "governance", "arch-rules"]
+ALL_MODULES = [
+    "format",
+    "lint",
+    "types",
+    "secrets",
+    "ci",
+    "hooks",
+    "governance",
+    "agents",
+    "arch-rules",
+]
 
 
 def copier_copy(stacks: list[str], modules: list[str] | None = None, **data: str) -> Step:

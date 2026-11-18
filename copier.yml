@@ -38,6 +38,9 @@ _skip_if_exists:
   - .prettierignore
   - .gitleaks.toml
   - .gitattributes
+  - AGENTS.md
+  - CLAUDE.md
+  - .github/pull_request_template.md
 
 _tasks:
   - command:
@@ -64,7 +67,7 @@ preset:
   help: Preset (the next question lets you add or remove single modules)
   choices:
     minimal - format, lint, types, secret scan, CI: minimal
-    standard - minimal + git hooks + governance (CODEOWNERS, Dependabot, CodeQL): standard
+    standard - minimal + git hooks + governance + AGENTS.md: standard
   default: standard
 
 modules:
@@ -78,11 +81,12 @@ modules:
     secrets - gitleaks secret scan: secrets
     ci - one GitHub Actions workflow running the gate: ci
     hooks - pre-commit git hooks (local feedback only): hooks
-    governance - CODEOWNERS, Dependabot, CodeQL: governance
+    governance - CODEOWNERS, Dependabot, CodeQL, PR template, branch-protection script: governance
+    agents - AGENTS.md telling coding agents (any tool) how to run the gate: agents
     arch-rules - example architecture rule (no raw DB queries outside dal/): arch-rules
   default: >-
     [[ ['format', 'lint', 'types', 'secrets', 'ci']
-       + (['hooks', 'governance'] if preset == 'standard' else []) ]]
+       + (['hooks', 'governance', 'agents'] if preset == 'standard' else []) ]]
 
 node_package_manager:
   type: str
@@ -109,6 +113,15 @@ code_owners:
     commented out: a placeholder owner would silently enforce nothing.
   when: "[[ 'governance' in modules ]]"
   default: ""
+
+required_reviews:
+  type: int
+  help: >-
+    Approving reviews required before merging (branch-protection script).
+    Working alone? 0 — GitHub does not let you approve your own pull request.
+  when: "[[ 'governance' in modules ]]"
+  default: 1
+  validator: "[% if required_reviews < 0 or required_reviews > 6 %]Use 0 to 6.[% endif %]"
 
 # ---- Computed: not asked, not stored ----
 node:
@@ -179,10 +192,26 @@ fmt:
   type: bool
   default: "[[ 'format' in modules ]]"
   when: false
+agents:
+  type: bool
+  default: "[[ 'agents' in modules ]]"
+  when: false
 gate_parts:
   type: str
   default: >-
     [[ ((['formatting'] if 'format' in modules else [])
        + (['lint'] if 'lint' in modules else [])
        + (['types'] if 'types' in modules else [])) | join(', ') ]]
+  when: false
+# Check names GitHub reports for the jobs the kit renders (job id, or the
+# CodeQL matrix job's name). The branch-protection script requires exactly these.
+required_checks:
+  type: yaml
+  default: >-
+    [[ ((['node'] if ci and node else []) + (['python'] if ci and py else [])
+       + (['go'] if ci and go else []) + (['secrets'] if ci and secrets else [])
+       + (['semgrep'] if ci and semgrep else [])
+       + ((['Analyze (javascript-typescript)'] if node else [])
+          + (['Analyze (python)'] if py else []) + (['Analyze (go)'] if go else [])
+          + ['Analyze (actions)'] if governance else [])) | tojson ]]
   when: false

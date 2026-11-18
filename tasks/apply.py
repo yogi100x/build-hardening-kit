@@ -283,7 +283,7 @@ def next_steps(stacks: list[str], modules: set[str]) -> None:
     if "hooks" in modules:
         lines.append("Hooks:  uvx pre-commit install")
     if "governance" in modules:
-        lines.append("Merge protection: see docs/BRANCH_PROTECTION.md in the kit")
+        lines.append("Block merges on these checks: .github/hardening/protect-branch.sh --dry-run")
     say("done. Run the gate locally:")
     for line in lines:
         print("    " + line)
