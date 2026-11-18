@@ -21,7 +21,7 @@ linters:
   exclusions:
     rules:
       # A package comment on `package main` adds little; keep the rule elsewhere.
-      - path: main\.go$
+      - path: (^|/)main\.go$
         linters: [revive]
         text: package-comments
   settings:
@@ -52,8 +52,9 @@ issues:
   max-issues-per-linter: 0
   max-same-issues: 0
   # The ratchet (only new issues fail) is applied where lint runs: `make lint`
-  # passes --new-from-rev, CI uses only-new-issues on pull requests and a
-  # report-only full run on [[ default_branch ]].
+  # passes --new-from-rev=origin/[[ default_branch ]] when that ref exists; CI
+  # runs `make check` on pull requests and reports all issues without failing
+  # on [[ default_branch ]].
 
 severity:
   default: error

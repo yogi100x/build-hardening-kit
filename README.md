@@ -39,7 +39,7 @@ already had; see NOT WIRED below. Then:
 
 | Stack | First run | Then commit |
 |---|---|---|
-| TypeScript / JavaScript | `npm run format` once (existing files get reformatted), existing lint problems: `npx eslint --suppress-all .` once, then `npm run check && npm test` | everything, incl. `package-lock.json` and `eslint-suppressions.json` |
+| TypeScript / JavaScript | `npm run format` once (existing files get reformatted), existing lint problems: `npx eslint --suppress-all .` once, then `npm run check && npm test` | everything, incl. your lockfile (`package-lock.json`, `pnpm-lock.yaml` or `yarn.lock`) and `eslint-suppressions.json` |
 | Python (uv) | `uv run ruff format .` once; existing type errors: annotate them, or fence old code (see [types](docs/modules/types.md)); then `uv run poe check && uv run poe test` | everything, incl. `uv.lock` |
 | Go | needs [golangci-lint v2](https://golangci-lint.run/docs/welcome/install/) and make; `make fmt` once, then `make check && make test` | everything |
 
@@ -79,8 +79,9 @@ to `package.json` and Python dev tools with `uv add`
 | Tools | copier 9.19, gitleaks 8.30, semgrep 1.186, pre-commit 4.7 |
 | CI | GitHub Actions. Other CI: each job is one or two commands to copy |
 
-The self-test runs nightly against the latest releases, so a breaking tool
-update shows up within a day.
+The self-test also runs nightly. Node LTS, Go stable and the npm version
+ranges move between runs, so breaking releases there show up within a day;
+the pinned tools above change only when the kit bumps them.
 
 ## Run the gate
 
@@ -119,11 +120,13 @@ uvx copier update --trust                                  # newest kit release
 uvx copier update --trust --data 'modules=["lint","types"]'  # change modules
 ```
 
-Upgrades merge kit changes with your edits. Files you own (`eslint.config.mjs`,
-`tsconfig.json`, `jsconfig.json`, `Makefile`, `ruff.toml`, `mypy.ini`,
-`poe_tasks.toml`, `.prettierignore`, `.gitleaks.toml`) are never overwritten.
-When the kit creates one, it points at a kit-owned file (`*.hardening.*`) that
-upgrades keep current. When your repo already has one, the kit keeps yours and
+Upgrades merge kit changes with your edits. Files you own are never
+overwritten: `eslint.config.mjs`, `tsconfig.json`, `jsconfig.json`, `Makefile`,
+`ruff.toml`, `mypy.ini`, `poe_tasks.toml`, `.prettierignore`, `.gitleaks.toml`,
+`.gitattributes`, `AGENTS.md`, `CLAUDE.md`, `.github/pull_request_template.md`.
+When the kit creates one of the first five, it points at a kit-owned file
+(`*.hardening.*`, `hardening.mk`) that upgrades keep current; the others are
+plain starting points. When your repo already has one, the kit keeps yours and
 lists it under **NOT WIRED** at the end of the install, with the one line to add
 — until you add it, that check runs without the kit's rules. Removing a module
 deletes its files and the npm scripts you did not change.

@@ -15,7 +15,8 @@ uv run --python 3.12 pytest tests/test_static.py   # rendered template only (sec
 ```
 
 Tools needed are listed in [tests/README.md](tests/README.md). CI runs the same
-on Linux, macOS and Windows, and nightly against the latest tool releases.
+on Linux, macOS and Windows, and nightly (Node LTS, Go stable and npm ranges
+move between runs; other tools are pinned and bumped deliberately).
 
 ## Layout
 

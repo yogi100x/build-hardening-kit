@@ -13,7 +13,7 @@ entry point you run locally:
 **Security defaults.** Actions pinned to commit SHAs; `permissions: {}` at the
 top and read-only per job; checkout without stored credentials; runs on the
 default branch are never cancelled. The kit's self-test runs actionlint and
-zizmor on every rendered combination.
+zizmor on representative rendered combinations.
 
 **Requirements.** Node: a `test` script in `package.json`. Python: a committed
 `uv.lock`. Go: `go.mod`.

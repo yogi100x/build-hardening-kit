@@ -6,7 +6,8 @@ install, which planted case is blocked or missed). The self-test asserts those
 outcomes, so a fix must update the entry in the same change, and anything new
 fails.
 
-Status: **Fixed (M2/M3)** with the check that proves it. No bug is open.
+Status: **Fixed** (with the milestone and the check that proves it), **Open**,
+or **Not reproduced**. Today: 59 fixed, B47 open, B25 not reproduced.
 
 | Id | Bug | Status |
 |---|---|---|

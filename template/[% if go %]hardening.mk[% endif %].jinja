@@ -24,8 +24,11 @@ test:
 	go test -race ./...
 
 # Compiles everything without leaving a binary in the repository.
+# (Tested with GNU make on Linux and macOS; on Windows, run the commands directly.)
+DEVNULL := $(if $(filter Windows_NT,$(OS)),NUL,/dev/null)
+
 build:
-	go build -o /dev/null ./...
+	go build -o $(DEVNULL) ./...
 
 # CHECK_LINT= leaves lint out of `make check` (CI does that on the default
 # branch, where it reports lint debt separately without failing).

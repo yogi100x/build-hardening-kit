@@ -19,7 +19,7 @@ proves itself with a self-test on Linux, macOS and Windows.
 - Branch-protection script requiring exactly the checks the workflows report.
 - `AGENTS.md` for coding agents.
 - Self-test: fixture repos per stack, upgrade tests, static checks of every
-  rendered combination (actionlint, zizmor), nightly runs.
+  representative rendered combinations (actionlint, zizmor), nightly runs.
 
 ### Changed
 
@@ -27,7 +27,8 @@ proves itself with a self-test on Linux, macOS and Windows.
   suppressions, `ruff --add-noqa`, golangci-lint `--new-from-rev`, semgrep
   `--baseline-commit`) instead of the custom ratchet.
 - The DAL rule is the optional `arch-rules` module.
-- golangci-lint v2; maintained Prettier mirror; gitleaks CLI (no licence key).
+- golangci-lint v2; hooks run the project's own locked Prettier and ruff;
+  gitleaks CLI (no licence key).
 
 ### Removed
 
@@ -37,6 +38,6 @@ proves itself with a self-test on Linux, macOS and Windows.
 
 ### Fixed
 
-59 bugs found by the self-test, independent reviews and a stranger following
-only the README. One is open and documented (B47); one reported bug did not
-reproduce (B25). See [tests/KNOWN_BUGS.md](tests/KNOWN_BUGS.md).
+61 bugs recorded from the self-test, independent reviews and a stranger
+following only the README: 59 fixed, one open and documented (B47), one that
+did not reproduce (B25). See [tests/KNOWN_BUGS.md](tests/KNOWN_BUGS.md).
