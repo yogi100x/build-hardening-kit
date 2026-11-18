@@ -1,0 +1,20 @@
+# Self-test harness for the kit itself. Not installed into user repos.
+[project]
+name = "build-hardening-kit-selftest"
+version = "0.0.0"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-timeout>=2.3"]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["tests/fixtures"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# A known-bug marker that starts passing must be removed: XPASS fails the run.
+xfail_strict = true
+timeout = 1200
+addopts = "-ra"
