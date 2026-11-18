@@ -49,4 +49,5 @@ custom ratchet and installer are replaced (milestone 3), so not patched here.
 | B36 | Gitleaks scanned all history on every PR: one old, rotated secret failed every PR forever | Fixed (M2) — PRs scan their own commits; `test_gitleaks_prs_scan_only_their_commits` |
 | B37 | On main, "only new issues" compared main with itself (golangci) or full scans failed main on existing debt (semgrep) | Fixed (M2) — main reports debt without failing; `test_main_reports_debt_without_failing` |
 | B38 | The pre-commit ruff (pinned v0.8.4) and CI's locked ruff could disagree on formatting | Fixed (M2) — hook runs `uv run ruff`; `test_python_hooks_use_project_ruff` |
+| B53 | On Windows (core.autocrlf=true) files check out with CRLF, so Prettier and gofmt fail on a fresh clone | Fixed (M2) — `.gitattributes` forces LF; Windows CI `*-clean` |
 | B39 | `jsconfig.json` includes only `src`, `apps`, `packages`; code elsewhere is not type-checked (or TS18003) | M3 |

@@ -1,0 +1,10 @@
+# LF everywhere, on every OS. Windows' default (core.autocrlf=true) checks text
+# out with CRLF, which formatters (Prettier endOfLine=lf, gofmt) reject.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
