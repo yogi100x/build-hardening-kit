@@ -97,6 +97,7 @@ def test_render_contents(rendered: dict[str, Path]) -> None:
         "hardening_rules.go",
         ".semgrep/hardening.yml",
         ".copier-answers.yml",
+        ".gitattributes",
     ]:
         assert (full / rel).is_file(), rel
     minimal = rendered["ts-minimal"]

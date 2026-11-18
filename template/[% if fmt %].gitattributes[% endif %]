@@ -1,0 +1,10 @@
+# LF line endings on every OS (build-hardening-kit). Without this, Git on
+# Windows checks text out with CRLF and the format checks fail. Yours to edit.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary

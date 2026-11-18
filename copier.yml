@@ -37,6 +37,7 @@ _skip_if_exists:
   - poe_tasks.toml
   - .prettierignore
   - .gitleaks.toml
+  - .gitattributes
 
 _tasks:
   - command:
@@ -173,6 +174,10 @@ hooks:
 governance:
   type: bool
   default: "[[ 'governance' in modules ]]"
+  when: false
+fmt:
+  type: bool
+  default: "[[ 'format' in modules ]]"
   when: false
 gate_parts:
   type: str
