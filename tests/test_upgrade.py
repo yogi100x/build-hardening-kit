@@ -62,7 +62,7 @@ def release_v2(kit: Path, rel: str, old: str, new: str) -> None:
     path = kit / rel
     text = path.read_text(encoding="utf-8")
     assert old in text
-    path.write_text(text.replace(old, new), encoding="utf-8")
+    path.write_text(text.replace(old, new), encoding="utf-8", newline="\n")
     git(kit, "commit", "-q", "-am", "kit v2")
     git(kit, "tag", "v2.0.0")
 
@@ -72,11 +72,12 @@ def test_update_keeps_user_edits_and_brings_kit_changes(installed: tuple[Path, R
     prettierrc = repo.path / ".prettierrc.json"
     data = json.loads(prettierrc.read_text(encoding="utf-8"))
     data["printWidth"] = 100  # the user's edit to a kit-owned file
-    prettierrc.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    prettierrc.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8", newline="\n")
     (repo.path / "eslint.config.mjs").write_text(
         'import hardening from "./eslint.hardening.mjs";\n\n'
         'export default [...hardening, { rules: { curly: "error" } }];\n',
         encoding="utf-8",
+        newline="\n",
     )
     repo.commit_all("user edits")
     release_v2(
@@ -100,7 +101,9 @@ def test_removing_a_module_removes_its_files_and_scripts(installed: tuple[Path, 
     pkg = json.loads((repo.path / "package.json").read_text(encoding="utf-8"))
     assert pkg["scripts"]["format:check"] == "prettier --check ."
     pkg["scripts"]["format"] = "prettier --write src"  # the user changed this one
-    (repo.path / "package.json").write_text(json.dumps(pkg, indent=2) + "\n", encoding="utf-8")
+    (repo.path / "package.json").write_text(
+        json.dumps(pkg, indent=2) + "\n", encoding="utf-8", newline="\n"
+    )
     repo.commit_all("user script")
 
     copier(
