@@ -1,0 +1,48 @@
+# AGENTS.md
+
+Instructions for coding agents (and people) working in this repository.
+Created by build-hardening-kit; yours to edit.
+
+## Before you say a change is done
+
+Run the gate. CI runs exactly these commands, so green here means green there.
+
+[% if node %]
+[% if gate_parts %]
+- `npm run check` — [[ gate_parts ]]
+[% endif %]
+- `npm test`
+[% endif %]
+[% if py %]
+[% if gate_parts %]
+- `uv run poe check` — [[ gate_parts ]]
+[% endif %]
+- `uv run poe test`
+[% endif %]
+[% if go %]
+- `make check` — [[ (([gate_parts] if gate_parts else []) + ['vet', 'build']) | join(', ') ]]
+- `make test`
+[% endif %]
+
+Fix the cause of a failure. Do not weaken a rule to get green.
+
+## Rules
+
+- Never skip hooks (`--no-verify`) and never disable a check to pass it. CI
+  runs every check again, so skipping only moves the failure.
+[% if 'lint' in modules and node %]
+- Existing lint problems are recorded in `eslint-suppressions.json`. Never add
+  to it to hide a new problem. When you fix a recorded one, lower the count with
+  `npx eslint --prune-suppressions .`.
+[% endif %]
+[% if secrets %]
+- Never commit a secret (keys, tokens, passwords, connection strings). Read them
+  from the environment. The secret scan fails the build on one.
+[% endif %]
+[% if 'arch-rules' in modules %]
+- Database queries live in `dal/` (or `data-access/`, `data_access/`). Call a
+  DAL function from application code; never the database client directly.
+[% endif %]
+- Kit-managed files (`*.hardening.*`[% if ci %], `.github/workflows/hardening.yml`[% endif %]) are
+  updated by `uvx copier update --trust`; put your own settings in the entry
+  files that import them.

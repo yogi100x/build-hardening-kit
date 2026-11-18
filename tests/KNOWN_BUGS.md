@@ -57,4 +57,9 @@ Status: **Fixed (M2/M3)** with the check that proves it. No bug is open.
 | B44 | CI assumed npm; pnpm and yarn repos failed | Fixed (M3 review) — `node_package_manager`; `test_package_manager_follows_the_answer` |
 | B45 | An existing Makefile's `test`/`check`/`build` targets silently overridden by `hardening.mk` | Fixed (M3 review) — install warns on each clash |
 | B46 | ESLint ignored every `*.config.*` file at any depth (e.g. `src/app.config.ts`); an empty poe `check` sequence with no check modules | Fixed (M3 review) — root configs only; no `check` step without modules (`test_no_check_step_without_check_modules`) |
+| B48 | Branch protection required CodeQL by default; on a private repo without Code Security it fails every PR and blocks all merges | Fixed (M4 review) — opt-in `require_codeql` |
+| B49 | Advice to add a merge queue, but workflows did not run on `merge_group`, so required checks never reported in the queue | Fixed (M4 review) — `test_workflows_run_in_merge_queue` |
+| B50 | `protect-branch.sh owner/repo --dry-run` ignored `--dry-run` and applied the change; it silently dropped existing required checks; bare error without `gh` | Fixed (M4 review) — strict argument parsing, `--replace` needed to drop checks; `test_protect_branch_arguments` |
+| B51 | AGENTS.md named `check` commands that do not exist when no format/lint/types module is on | Fixed (M4 review) — `test_agents_md_names_only_real_commands` |
+| B52 | Protection test compared job ids, not the names GitHub reports, so it could pass for the wrong reason | Fixed (M4 review) — reads `name:` and expands the matrix |
 | B47 | A repo that already has a kit-managed file (`.pre-commit-config.yaml`, `.golangci.yml`, ...) makes a non-interactive first install stop with a conflict | Open — documented in the README (install interactively); a pre-flight check is a later improvement |

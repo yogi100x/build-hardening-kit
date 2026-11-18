@@ -27,7 +27,8 @@ dev dependencies to `package.json` and Python dev tools with `uv add`
 | `secrets` | gitleaks (CI scans the PR's own commits; the default branch scans all) | minimal |
 | `ci` | one workflow, `.github/workflows/hardening.yml`, running the same entry points you run locally | minimal |
 | `hooks` | pre-commit hooks (fast local feedback; CI is the gate) | standard |
-| `governance` | CODEOWNERS, Dependabot, CodeQL | standard |
+| `governance` | CODEOWNERS, Dependabot, CodeQL, a PR template, and `.github/hardening/protect-branch.sh`, which makes exactly these checks block merges ([docs/BRANCH_PROTECTION.md](docs/BRANCH_PROTECTION.md)) | standard |
+| `agents` | `AGENTS.md` (read by most coding agents; `CLAUDE.md` points to it) with the gate commands and rules | standard |
 | `arch-rules` | example rule: no raw DB queries outside `dal/` ([DAL_POLICY.md](DAL_POLICY.md)) | off |
 
 ## Run the gate
@@ -89,5 +90,6 @@ every bug found so far is in [tests/KNOWN_BUGS.md](tests/KNOWN_BUGS.md).
 
 - [GOOGLE_GRADE.md](GOOGLE_GRADE.md) — the review-process half of hardening.
 - [docs/BRANCH_PROTECTION.md](docs/BRANCH_PROTECTION.md) — make the checks block merges.
+- [docs/decisions/](docs/decisions/README.md) — why the kit is built this way.
 
 Licence: MIT.
