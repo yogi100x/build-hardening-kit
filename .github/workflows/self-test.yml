@@ -1,0 +1,60 @@
+# Self-test: install every variant into fixture repos and prove each gate passes
+# on a clean repo and fails on a planted violation. See tests/README.md.
+name: self-test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 4 * * *" # nightly: catch upstream tool releases that break the kit
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: self-test-${{ github.ref }}
+  # Never cancel runs on main; a cancelled main run records nothing.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  fixtures:
+    name: fixtures (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      BHK_REQUIRE_TOOLS: "1"
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: stable
+          cache: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Install Go tools
+        shell: bash
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Self-test
+        shell: bash
+        run: uv run --python 3.12 pytest --junitxml=selftest-${{ matrix.os }}.xml
+      - name: Keep results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: selftest-${{ matrix.os }}
+          path: selftest-${{ matrix.os }}.xml
+          retention-days: 30
