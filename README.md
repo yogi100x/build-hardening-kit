@@ -62,10 +62,20 @@ uvx copier update --trust --data 'modules=["lint","types"]'  # change modules
 
 Upgrades merge kit changes with your edits. Files you own (`eslint.config.mjs`,
 `tsconfig.json`, `jsconfig.json`, `Makefile`, `ruff.toml`, `mypy.ini`,
-`poe_tasks.toml`, `.prettierignore`, `.gitleaks.toml`) are created once and
-never overwritten; each points at a kit-owned file (`*.hardening.*`) that
-upgrades keep current. Removing a module deletes its files and the npm scripts
-you did not change.
+`poe_tasks.toml`, `.prettierignore`, `.gitleaks.toml`) are never overwritten.
+When the kit creates one, it points at a kit-owned file (`*.hardening.*`) that
+upgrades keep current. When your repo already has one, the kit keeps yours and
+lists it under **NOT WIRED** at the end of the install, with the one line to add
+— until you add it, that check runs without the kit's rules. Removing a module
+deletes its files and the npm scripts you did not change.
+
+If your repo already has a file the kit manages itself (`.pre-commit-config.yaml`,
+`.golangci.yml`, `.prettierrc.json`, `.github/dependabot.yml`,
+`.github/CODEOWNERS`), copier asks before replacing it, so run the first install
+interactively (or move yours aside and merge it back afterwards).
+
+Node: npm, pnpm and yarn are supported (`node_package_manager`); CI installs
+from that lockfile.
 
 ## The kit's own tests
 

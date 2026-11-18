@@ -22,6 +22,8 @@ RENDERS = {
     "js-all": (["js"], ALL, {}),
     "py-owners": (["python"], ALL, {"code_owners": "@acme/core"}),
     "ts-minimal": (["ts"], None, {"preset": "minimal"}),
+    "ts-pnpm": (["ts"], None, {"node_package_manager": "pnpm"}),
+    "py-ci-only": (["python"], ["secrets", "ci"], {}),
 }
 
 
@@ -131,6 +133,22 @@ def test_workflows_pinned_and_least_privilege(rendered: dict[str, Path]) -> None
             assert not re.search(r"pip install (?![^\n]*==)", script), f"{path}: {script}"
             for m in re.finditer(r"uvx (\S+)", script):
                 assert "@" in m.group(1), f"{path}: uvx {m.group(1)} has no version"
+
+
+def test_package_manager_follows_the_answer(rendered: dict[str, Path]) -> None:
+    """Review finding: npm-only CI broke pnpm and yarn repos."""
+    text = (rendered["ts-pnpm"] / ".github/workflows/hardening.yml").read_text()
+    assert "pnpm install --frozen-lockfile" in text and "npm ci" not in text
+    assert "cache: pnpm" in text
+    npm = (rendered["ts-minimal"] / ".github/workflows/hardening.yml").read_text()
+    assert "npm ci" in npm and "pnpm" not in npm
+
+
+def test_no_check_step_without_check_modules(rendered: dict[str, Path]) -> None:
+    """With only secrets + ci, there is no empty `check` to run."""
+    root = rendered["py-ci-only"]
+    assert "poe check" not in (root / ".github/workflows/hardening.yml").read_text()
+    assert "[tasks.check]" not in (root / "poe_tasks.toml").read_text()
 
 
 def test_codeql_uses_languages_input(rendered: dict[str, Path]) -> None:

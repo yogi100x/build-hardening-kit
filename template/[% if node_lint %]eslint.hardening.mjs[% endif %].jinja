@@ -22,7 +22,9 @@ export default [
       ".next/",
       "coverage/",
       ".venv/",
-      "**/*.config.*",
+      // Tool configs at the repo root (vite.config.ts, ...), which are
+      // usually outside the TypeScript project.
+      "*.config.*",
     ],
   },
   { linterOptions: { reportUnusedDisableDirectives: "error" } },

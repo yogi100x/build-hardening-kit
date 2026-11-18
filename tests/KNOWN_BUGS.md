@@ -50,3 +50,11 @@ Status: **Fixed (M2/M3)** with the check that proves it. No bug is open.
 | B38 | The pre-commit ruff (pinned v0.8.4) and CI's locked ruff could disagree on formatting | Fixed (M2) — hook runs `uv run ruff`; `test_python_hooks_use_project_ruff` |
 | B53 | On Windows (core.autocrlf=true) files check out with CRLF, so Prettier and gofmt fail on a fresh clone | Fixed (M2) — `.gitattributes` forces LF; Windows CI `*-clean` |
 | B39 | `jsconfig.json` includes only `src`, `apps`, `packages`; code elsewhere is not type-checked (or TS18003) | Fixed (M3) — checks the whole repo except tooling (`js-types-root`) |
+| B40 | Changing modules from a partial set left the npm `check` script stale (CI ran a deleted script or skipped a new check) | Fixed (M3 review) — `test_check_script_follows_every_module_change` |
+| B41 | A repo's existing `eslint.config.mjs` / `tsconfig.json` / `ruff.toml` was kept but never wired to the kit's rules, silently | Fixed (M3 review) — install lists them under NOT WIRED with the line to add; `test_existing_config_files_are_kept_and_reported` |
+| B42 | `package.json` and Makefile rewritten with CRLF on Windows | Fixed (M3 review) — `test_package_json_written_with_lf` |
+| B43 | Python dev tools listed only as optional extras counted as installed; no `uv.lock` created | Fixed (M3 review) — reads the dev group only, runs `uv lock`; `test_dev_dependencies_reads_only_what_uv_sync_installs` |
+| B44 | CI assumed npm; pnpm and yarn repos failed | Fixed (M3 review) — `node_package_manager`; `test_package_manager_follows_the_answer` |
+| B45 | An existing Makefile's `test`/`check`/`build` targets silently overridden by `hardening.mk` | Fixed (M3 review) — install warns on each clash |
+| B46 | ESLint ignored every `*.config.*` file at any depth (e.g. `src/app.config.ts`); an empty poe `check` sequence with no check modules | Fixed (M3 review) — root configs only; no `check` step without modules (`test_no_check_step_without_check_modules`) |
+| B47 | A repo that already has a kit-managed file (`.pre-commit-config.yaml`, `.golangci.yml`, ...) makes a non-interactive first install stop with a conflict | Open — documented in the README (install interactively); a pre-flight check is a later improvement |

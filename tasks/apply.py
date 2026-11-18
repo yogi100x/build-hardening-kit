@@ -32,6 +32,7 @@ NODE_DEV_DEPS = {
 }
 PY_DEV_TOOLS = {"base": ["poethepoet", "pytest"], "ruff": ["ruff"], "types": ["mypy"]}
 RULEGUARD_DSL = "github.com/quasilyte/go-ruleguard/dsl@v0.3.23"
+KIT_MAKE_TARGETS = ("fmt", "fmt-check", "lint", "vet", "test", "build", "check")
 
 
 def say(msg: str) -> None:
@@ -73,10 +74,48 @@ def node_scripts(ts: bool, modules: set[str]) -> dict[str, str]:
     return scripts
 
 
-ALL_NODE_MODULES = {"format", "lint", "types"}
+NODE_MODULES = ("format", "lint", "types")
 
 
-def apply_node(stacks: list[str], modules: set[str]) -> None:
+def known_kit_scripts() -> dict[str, set[str]]:
+    """Every value the kit has ever written for each script: both stacks and
+    every combination of modules. A script holding one of these is the kit's;
+    anything else was changed by the user and is never touched."""
+    known: dict[str, set[str]] = {}
+    for ts in (True, False):
+        for mask in range(1 << len(NODE_MODULES)):
+            subset = {m for i, m in enumerate(NODE_MODULES) if mask & (1 << i)}
+            for name, value in node_scripts(ts, subset).items():
+                known.setdefault(name, set()).add(value)
+    return known
+
+
+LOCKFILES = {"package-lock.json": "npm", "pnpm-lock.yaml": "pnpm", "yarn.lock": "yarn"}
+INSTALL = {
+    "npm": ["npm", "install", "--no-audit", "--no-fund"],
+    "pnpm": ["pnpm", "install"],
+    "yarn": ["yarn", "install"],
+}
+
+
+def write_lf(path: Path, text: str) -> None:
+    """Write with LF line endings on every OS (the kit's Prettier enforces LF)."""
+    with path.open("w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+
+
+def warn_unwired(path: str, needle: str, how: str) -> None:
+    """An entry file the user already had is kept as is; say so loudly if it
+    does not pull in the kit's file, because then the kit's rules do nothing."""
+    p = Path(path)
+    if p.exists() and needle not in p.read_text(encoding="utf-8"):
+        UNWIRED.append(f"{path}: {how}")
+
+
+UNWIRED: list[str] = []
+
+
+def apply_node(stacks: list[str], modules: set[str], package_manager: str) -> None:
     pkg_path = Path("package.json")
     if not pkg_path.exists():
         warn("no package.json here; create one (npm init -y) and re-run `copier update --trust`")
@@ -87,20 +126,18 @@ def apply_node(stacks: list[str], modules: set[str]) -> None:
     pkg = json.loads(raw)
     ts = "ts" in stacks
 
-    wanted = node_scripts(ts, modules)
-    every = {**node_scripts(ts, ALL_NODE_MODULES), **node_scripts(not ts, ALL_NODE_MODULES)}
+    wanted = node_scripts(ts, modules & set(NODE_MODULES))
+    known = known_kit_scripts()
     scripts = pkg.setdefault("scripts", {})
     for name, value in wanted.items():
         current = scripts.get(name)
-        if current is None:
+        if current is None or current in known[name]:
             scripts[name] = value
-        elif current != value and current not in every.values():
+        elif current != value:
             warn(f"kept your npm script '{name}' ({current!r}); the kit's is {value!r}")
-        else:
-            scripts[name] = value
-    for name, value in every.items():
+    for name, values in known.items():
         # A module was removed: drop its script only if it is still the kit's.
-        if name not in wanted and scripts.get(name) == value:
+        if name not in wanted and scripts.get(name) in values:
             del scripts[name]
     if "test" not in scripts:
         warn("package.json has no 'test' script; CI runs `npm test`, so add one")
@@ -118,10 +155,37 @@ def apply_node(stacks: list[str], modules: set[str]) -> None:
 
     new = json.dumps(pkg, indent=indent, ensure_ascii=False) + "\n"
     if new != raw:
-        pkg_path.write_text(new, encoding="utf-8")
+        write_lf(pkg_path, new)
         say("updated package.json (scripts, devDependencies)")
+
+    if "lint" in modules:
+        warn_unwired(
+            "eslint.config.mjs",
+            "eslint.hardening.mjs",
+            'add `import hardening from "./eslint.hardening.mjs";` and spread `...hardening` '
+            "first in the exported array",
+        )
+    if ts and {"types", "lint"} & modules:
+        warn_unwired(
+            "tsconfig.json",
+            "tsconfig.hardening.json",
+            'add `"extends": "./tsconfig.hardening.json"`',
+        )
+    if not ts and "types" in modules:
+        warn_unwired(
+            "jsconfig.json",
+            "jsconfig.hardening.json",
+            'add `"extends": "./jsconfig.hardening.json"`',
+        )
+
+    lock = next((pm for f, pm in LOCKFILES.items() if Path(f).exists()), None)
+    if lock and lock != package_manager:
+        warn(
+            f"found a {lock} lockfile but the kit was set up for {package_manager}; "
+            f"re-run with --data node_package_manager={lock}"
+        )
     if not SKIP_INSTALL:
-        run(["npm", "install", "--no-audit", "--no-fund"])
+        run(INSTALL[package_manager])
 
 
 def apply_python(modules: set[str]) -> None:
@@ -130,6 +194,8 @@ def apply_python(modules: set[str]) -> None:
         warn("no pyproject.toml here; create one (uv init) and re-run `copier update --trust`")
         return
     text = pyproject.read_text(encoding="utf-8")
+    if {"lint", "format"} & modules:
+        warn_unwired("ruff.toml", "ruff.hardening.toml", 'add `extend = "ruff.hardening.toml"`')
     if Path("ruff.toml").exists() and re.search(r"^\[tool\.ruff", text, re.MULTILINE):
         warn(
             "ruff.toml now takes precedence over pyproject.toml [tool.ruff]; move those settings into ruff.toml"
@@ -141,12 +207,35 @@ def apply_python(modules: set[str]) -> None:
         tools += PY_DEV_TOOLS["ruff"]
     if "types" in modules:
         tools += PY_DEV_TOOLS["types"]
-    missing = [t for t in tools if not re.search(rf'["\']{re.escape(t)}([<>=~!\[; "\']|$)', text)]
+    present = dev_dependencies(text)
+    missing = [t for t in tools if t not in present]
     if missing and not SKIP_INSTALL:
         run(["uv", "add", "--dev", *missing])
     elif missing:
         say("add the dev tools: uv add --dev " + " ".join(missing))
+    if not Path("uv.lock").exists() and not SKIP_INSTALL:
+        run(["uv", "lock"])
     say("commit uv.lock: CI installs with `uv sync --locked`")
+
+
+def dev_dependencies(pyproject_text: str) -> set[str]:
+    """Names in the dev group uv installs by default (`uv sync`): the `dev`
+    dependency group and [tool.uv] dev-dependencies. Optional extras do not
+    count: CI's `uv sync --locked` does not install them."""
+    try:
+        import tomllib
+    except ModuleNotFoundError:  # Python < 3.11: assume nothing is present
+        return set()
+    data = tomllib.loads(pyproject_text)
+    specs = list((data.get("dependency-groups") or {}).get("dev") or [])
+    specs += list(((data.get("tool") or {}).get("uv") or {}).get("dev-dependencies") or [])
+    names = set()
+    for spec in specs:
+        if isinstance(spec, str):
+            m = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", spec)
+            if m:
+                names.add(m.group(1).lower().replace("_", "-"))
+    return names
 
 
 def apply_go(modules: set[str]) -> None:
@@ -154,8 +243,19 @@ def apply_go(modules: set[str]) -> None:
     if makefile.exists():
         text = makefile.read_text(encoding="utf-8")
         if not re.search(r"^-?include\s+hardening\.mk\s*$", text, re.MULTILINE):
-            makefile.write_text(text.rstrip("\n") + "\n\ninclude hardening.mk\n", encoding="utf-8")
+            write_lf(makefile, text.rstrip("\n") + "\n\ninclude hardening.mk\n")
             say("added `include hardening.mk` to your Makefile")
+        clashes = sorted(
+            t
+            for t in KIT_MAKE_TARGETS
+            if re.search(rf"^{re.escape(t)}\s*:(?!=)", text, re.MULTILINE)
+        )
+        if clashes:
+            warn(
+                "your Makefile already defines " + ", ".join(clashes) + "; hardening.mk "
+                "defines them too, and make runs whichever comes last (it prints "
+                "'overriding commands'). Rename yours or drop them."
+            )
     gomod = Path("go.mod")
     if (
         "arch-rules" in modules
@@ -187,6 +287,13 @@ def next_steps(stacks: list[str], modules: set[str]) -> None:
     say("done. Run the gate locally:")
     for line in lines:
         print("    " + line)
+    if UNWIRED:
+        print()
+        warn("NOT WIRED — these files existed before, so the kit kept them as they")
+        warn("are, and they do not use the kit's rules yet. Until you add one line")
+        warn("to each, those checks run without the kit's settings:")
+        for item in UNWIRED:
+            print("    - " + item)
 
 
 def main() -> int:
@@ -194,7 +301,7 @@ def main() -> int:
     stacks: list[str] = answers["stacks"]
     modules = set(answers["modules"])
     if "ts" in stacks or "js" in stacks:
-        apply_node(stacks, modules)
+        apply_node(stacks, modules, answers.get("node_package_manager") or "npm")
     if "python" in stacks:
         apply_python(modules)
     if "go" in stacks:

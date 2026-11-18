@@ -42,7 +42,7 @@ _tasks:
   - command:
       - "[[ _copier_python ]]"
       - "[[ _copier_conf.src_path ]]/tasks/apply.py"
-      - "[[ {'stacks': stacks, 'modules': modules} | tojson ]]"
+      - "[[ {'stacks': stacks, 'modules': modules, 'node_package_manager': node_package_manager} | tojson ]]"
 
 stacks:
   type: str
@@ -82,6 +82,13 @@ modules:
   default: >-
     [[ ['format', 'lint', 'types', 'secrets', 'ci']
        + (['hooks', 'governance'] if preset == 'standard' else []) ]]
+
+node_package_manager:
+  type: str
+  help: Node package manager (the lockfile CI installs from)
+  choices: [npm, pnpm, yarn]
+  default: npm
+  when: "[[ 'ts' in stacks or 'js' in stacks ]]"
 
 default_branch:
   type: str
@@ -166,4 +173,11 @@ hooks:
 governance:
   type: bool
   default: "[[ 'governance' in modules ]]"
+  when: false
+gate_parts:
+  type: str
+  default: >-
+    [[ ((['formatting'] if 'format' in modules else [])
+       + (['lint'] if 'lint' in modules else [])
+       + (['types'] if 'types' in modules else [])) | join(', ') ]]
   when: false
