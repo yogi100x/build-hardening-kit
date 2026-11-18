@@ -38,7 +38,7 @@ def merge_package_snippet(subdir: str = "") -> Step:
         for key in ("scripts", "devDependencies"):
             pkg[key] = {**pkg.get(key, {}), **snip.get(key, {})}
         pkg["lint-staged"] = snip.get("lint-staged", {})
-        pkg_path.write_text(json.dumps(pkg, indent=2) + "\n", encoding="utf-8")
+        pkg_path.write_text(json.dumps(pkg, indent=2) + "\n", encoding="utf-8", newline="\n")
         snip_path.unlink()
 
     return step
@@ -50,7 +50,7 @@ def append_pyproject_snippet(subdir: str = "") -> Step:
     def step(repo: Repo) -> None:
         root = repo.path / subdir if subdir else repo.path
         snip = root / "pyproject.snippet.toml"
-        with (root / "pyproject.toml").open("a", encoding="utf-8") as fh:
+        with (root / "pyproject.toml").open("a", encoding="utf-8", newline="\n") as fh:
             fh.write("\n" + snip.read_text(encoding="utf-8"))
         snip.unlink()
 
@@ -63,7 +63,7 @@ def set_go_module_prefix(module: str) -> Step:
     def step(repo: Repo) -> None:
         cfg = repo.path / ".golangci.yml"
         text = cfg.read_text(encoding="utf-8").replace("github.com/yourorg", module)
-        cfg.write_text(text, encoding="utf-8")
+        cfg.write_text(text, encoding="utf-8", newline="\n")
 
     return step
 

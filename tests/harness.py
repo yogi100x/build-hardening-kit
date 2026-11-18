@@ -90,7 +90,7 @@ class Repo:
     def write(self, rel: str, content: str) -> None:
         target = self.path / rel
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
+        target.write_text(content, encoding="utf-8", newline="\n")
 
     def commit_all(self, message: str) -> None:
         git(self.path, "add", "-A")
