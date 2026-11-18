@@ -26,8 +26,14 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      go-modules:
+        patterns: ["*"]
 [% endif %]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

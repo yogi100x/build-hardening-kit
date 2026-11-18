@@ -4,7 +4,8 @@
 [% if 'format' in modules %]format = "ruff format --check ."
 [% endif %][% if 'lint' in modules %]lint = "ruff check ."
 [% endif %][% if py_types %]types = "mypy ."
-[% endif %]test = "pytest -q"
+[% endif %]# python -m puts the project root on sys.path, so tests can import root modules.
+test = "python -m pytest -q"
 
 [% if gate_parts %]
 [tasks.check]

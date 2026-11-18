@@ -10,8 +10,12 @@ fmt-check:
 	golangci-lint fmt --diff
 
 # Only issues new since origin/[[ default_branch ]] fail; CI reports the rest on [[ default_branch ]].
+# The base for "only new issues". Without an origin/[[ default_branch ]] (a repo
+# with no remote yet) every issue counts as new.
+LINT_BASE ?= $(shell git rev-parse --verify --quiet origin/[[ default_branch ]] >/dev/null 2>&1 && echo origin/[[ default_branch ]])
+
 lint:
-	golangci-lint run --new-from-rev=origin/[[ default_branch ]]
+	golangci-lint run $(if $(LINT_BASE),--new-from-rev=$(LINT_BASE))
 
 vet:
 	go vet ./...
@@ -19,8 +23,12 @@ vet:
 test:
 	go test -race ./...
 
+# Compiles everything without leaving a binary in the repository.
+# (Tested with GNU make on Linux and macOS; on Windows, run the commands directly.)
+DEVNULL := $(if $(filter Windows_NT,$(OS)),NUL,/dev/null)
+
 build:
-	go build ./...
+	go build -o $(DEVNULL) ./...
 
 # CHECK_LINT= leaves lint out of `make check` (CI does that on the default
 # branch, where it reports lint debt separately without failing).

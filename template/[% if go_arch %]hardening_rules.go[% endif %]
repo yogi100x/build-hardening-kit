@@ -19,8 +19,5 @@ func rawDBQuery(m dsl.Matcher) {
 		Report(`raw DB query outside dal/ — move it into a DAL function`)
 }
 
-// Example: ban fmt.Println in committed code (use a logger).
-func noFmtPrintln(m dsl.Matcher) {
-	m.Match(`fmt.Println($*_)`).
-		Report(`use the structured logger, not fmt.Println`)
-}
+// Add your own rules here: each func is one rule, matched on the syntax tree.
+// See https://go-ruleguard.github.io/by-example/
