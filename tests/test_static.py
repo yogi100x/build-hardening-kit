@@ -199,7 +199,10 @@ def test_go_ratchet_where_lint_runs(rendered: dict[str, Path]) -> None:
     assert "new-from-rev" not in (cfg.get("issues") or {})
     assert "prefix(example.com/x)" in cfg["formatters"]["settings"]["gci"]["sections"]
     make = (root / "hardening.mk").read_text(encoding="utf-8")
-    assert "--new-from-rev=origin/main" in make and "fmt --diff" in make
+    # Only issues new since origin/main fail; with no such ref, all issues count.
+    assert "origin/main" in make and "--new-from-rev=$(LINT_BASE)" in make
+    assert "fmt --diff" in make
+    assert "go build -o /dev/null ./..." in make  # no binary left in the repo
     assert re.search(r"^check:.*fmt-check.*\$\(CHECK_LINT\)", make, re.MULTILINE)
 
 

@@ -66,7 +66,19 @@ export default [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/no-floating-promises": [
+        "error",
+        {
+          // node:test's test()/describe() return promises the runner awaits.
+          allowForKnownSafeCalls: [
+            {
+              from: "package",
+              package: "node:test",
+              name: ["test", "it", "describe", "suite"],
+            },
+          ],
+        },
+      ],
       "@typescript-eslint/await-thenable": "error",
     },
   }),

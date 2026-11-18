@@ -6,38 +6,92 @@ example architecture rule to a TypeScript, JavaScript, Python or Go repository.
 The kit tests itself: every module is installed into sample repos and must pass
 on a clean repo and fail on a planted problem, on Linux, macOS and Windows.
 
-## Install
+## Quickstart
 
-Needs [uv](https://docs.astral.sh/uv/) (for `uvx`) and git. Run from your repo root:
+Needs [uv](https://docs.astral.sh/uv/) (for `uvx`) and git. In a clean working
+tree at your repo root:
 
 ```bash
 uvx copier copy --trust gh:yogi100x/build-hardening-kit .
 ```
 
-You pick your stacks, a preset (`minimal` or `standard`) and, if you like,
-single modules. `--trust` lets the kit's post-install task add npm scripts and
-dev dependencies to `package.json` and Python dev tools with `uv add`
+Answer the questions (stacks, preset, modules). Without a terminal (scripts,
+CI, agents), pass the answers instead:
+
+```bash
+uvx copier copy --trust --defaults \
+  --data 'stacks=["ts"]' --data preset=standard \
+  gh:yogi100x/build-hardening-kit .
+```
+
+| Answer | Values |
+|---|---|
+| `stacks` | list of `ts`, `js`, `python`, `go` (not `ts` and `js` together) |
+| `preset` | `minimal`, `standard` (default) |
+| `modules` | list; overrides the preset: `format`, `lint`, `types`, `secrets`, `ci`, `hooks`, `governance`, `agents`, `arch-rules` |
+| `node_package_manager` | `npm` (default), `pnpm`, `yarn` |
+| `default_branch` | default `main` |
+| `go_module` | your module path from `go.mod` |
+| `code_owners`, `required_reviews`, `require_codeql` | see [governance](docs/modules/governance.md) |
+
+A red `conflict … skip` line during install means the kit kept a file you
+already had; see NOT WIRED below. Then:
+
+| Stack | First run | Then commit |
+|---|---|---|
+| TypeScript / JavaScript | `npm run format` once (existing files get reformatted), existing lint problems: `npx eslint --suppress-all .` once, then `npm run check && npm test` | everything, incl. `package-lock.json` and `eslint-suppressions.json` |
+| Python (uv) | `uv run ruff format .` once; existing type errors: annotate them, or fence old code (see [types](docs/modules/types.md)); then `uv run poe check && uv run poe test` | everything, incl. `uv.lock` |
+| Go | needs [golangci-lint v2](https://golangci-lint.run/docs/welcome/install/) and make; `make fmt` once, then `make check && make test` | everything |
+
+With `hooks`: `uvx pre-commit install`. With `governance`:
+`.github/hardening/protect-branch.sh --dry-run`, then without `--dry-run`, to
+make the checks block merges.
+
+If the install ends with **NOT WIRED**, your repo already had that config file;
+add the one line it shows.
+
+`--trust` lets the kit's post-install task add npm scripts and dev dependencies
+to `package.json` and Python dev tools with `uv add`
 ([`tasks/apply.py`](tasks/apply.py); read it first if you prefer).
+
+## Modules
 
 | Module | What it adds | Preset |
 |---|---|---|
-| `format` | Prettier / ruff format / gofmt+gci check | minimal |
-| `lint` | ESLint, ruff, golangci-lint; warnings are errors | minimal |
-| `types` | strict `tsc`, `checkJs`, `mypy --strict`, `go vet` | minimal |
-| `secrets` | gitleaks (CI scans the PR's own commits; the default branch scans all) | minimal |
-| `ci` | one workflow, `.github/workflows/hardening.yml`, running the same entry points you run locally | minimal |
-| `hooks` | pre-commit hooks (fast local feedback; CI is the gate) | standard |
-| `governance` | CODEOWNERS, Dependabot, CodeQL, a PR template, and `.github/hardening/protect-branch.sh`, which makes exactly these checks block merges ([docs/BRANCH_PROTECTION.md](docs/BRANCH_PROTECTION.md)) | standard |
-| `agents` | `AGENTS.md` (read by most coding agents; `CLAUDE.md` points to it) with the gate commands and rules | standard |
-| `arch-rules` | example rule: no raw DB queries outside `dal/` ([DAL_POLICY.md](DAL_POLICY.md)) | off |
+| [`format`](docs/modules/format.md) | Prettier / ruff format / gofmt+gci check | minimal |
+| [`lint`](docs/modules/lint.md) | ESLint, ruff, golangci-lint; warnings are errors | minimal |
+| [`types`](docs/modules/types.md) | strict `tsc`, `checkJs`, `mypy --strict`, `go vet` | minimal |
+| [`secrets`](docs/modules/secrets.md) | gitleaks (CI scans the PR's own commits; the default branch scans all) | minimal |
+| [`ci`](docs/modules/ci.md) | one workflow, `.github/workflows/hardening.yml`, running the same entry points you run locally | minimal |
+| [`hooks`](docs/modules/hooks.md) | pre-commit hooks (fast local feedback; CI is the gate) | standard |
+| [`governance`](docs/modules/governance.md) | CODEOWNERS, Dependabot, CodeQL, a PR template, and a script that makes exactly these checks block merges | standard |
+| [`agents`](docs/modules/agents.md) | `AGENTS.md` (read by most coding agents; `CLAUDE.md` points to it) with the gate commands and rules | standard |
+| [`arch-rules`](docs/modules/arch-rules.md) | example rule: no raw DB queries outside `dal/` | off |
+
+## Tested with
+
+| | |
+|---|---|
+| OS | Linux, macOS, Windows (GitHub-hosted runners; Windows uses Git Bash) |
+| Node | current LTS; ESLint 9.39+, TypeScript 5.9, Prettier 3.10 |
+| Python | 3.12 with uv; ruff, mypy, pytest, poethepoet |
+| Go | stable; golangci-lint v2.15 |
+| Tools | copier 9.19, gitleaks 8.30, semgrep 1.186, pre-commit 4.7 |
+| CI | GitHub Actions. Other CI: each job is one or two commands to copy |
+
+The self-test runs nightly against the latest releases, so a breaking tool
+update shows up within a day.
 
 ## Run the gate
 
-| Stack | Locally (and in CI) |
+| Stack | Locally (CI's per-stack job runs the same) |
 |---|---|
 | TypeScript / JavaScript | `npm run check && npm test` |
 | Python | `uv run poe check && uv run poe test` |
 | Go | `make check && make test` |
+
+The secret scan and the semgrep rules run in CI and in the git hooks, not in
+these commands.
 
 ## Existing problems: debt only goes down
 
@@ -50,7 +104,11 @@ records today's findings once; new ones fail; fixed ones must be recorded:
   with `governance`, CODEOWNERS requires an owner to approve it growing.
 - **ruff:** `uv run ruff check --add-noqa .` marks today's findings inline.
 - **golangci-lint and semgrep:** pull requests fail only on issues new since the
-  base branch; the default branch reports the rest without failing.
+  base branch; the default branch reports the rest without failing. Locally,
+  `make lint` compares with `origin/<default branch>`; in a repo with no remote
+  yet, every issue counts as new.
+- **mypy:** annotate, or fence old modules with `ignore_errors` sections
+  ([types](docs/modules/types.md)).
 
 There is no switch in a PR's text that turns a gate off.
 
@@ -91,5 +149,7 @@ every bug found so far is in [tests/KNOWN_BUGS.md](tests/KNOWN_BUGS.md).
 - [GOOGLE_GRADE.md](GOOGLE_GRADE.md) — the review-process half of hardening.
 - [docs/BRANCH_PROTECTION.md](docs/BRANCH_PROTECTION.md) — make the checks block merges.
 - [docs/decisions/](docs/decisions/README.md) — why the kit is built this way.
+- [CHANGELOG.md](CHANGELOG.md), [CONTRIBUTING.md](CONTRIBUTING.md),
+  [SECURITY.md](SECURITY.md) (report vulnerabilities privately).
 
 Licence: MIT.

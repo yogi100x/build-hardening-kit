@@ -18,6 +18,12 @@ linters:
     - errorlint # wrong error wrapping
     - nilerr # returning nil after err check
     - misspell
+  exclusions:
+    rules:
+      # A package comment on `package main` adds little; keep the rule elsewhere.
+      - path: main\.go$
+        linters: [revive]
+        text: package-comments
   settings:
     govet:
       enable-all: true

@@ -26,7 +26,11 @@ SKIP_INSTALL = os.environ.get("HARDENING_SKIP_INSTALL") == "1"
 NODE_DEV_DEPS = {
     "format": {"prettier": "^3.10.1"},
     "lint": {"eslint": "^9.39.0", "@eslint/js": "^9.39.0", "globals": "^17.14.0"},
-    "lint-ts": {"typescript-eslint": "^8.73.0", "typescript": "^5.9.3"},
+    "lint-ts": {
+        "typescript-eslint": "^8.73.0",
+        "typescript": "^5.9.3",
+        "@types/node": "^24.19.0",
+    },
     "types": {"typescript": "^5.9.3"},
     "types-js": {"@types/node": "^24.19.0"},
 }
@@ -146,8 +150,8 @@ def apply_node(stacks: list[str], modules: set[str], package_manager: str) -> No
     keys = [m for m in ("format", "lint", "types") if m in modules]
     if "lint" in modules and ts:
         keys.append("lint-ts")
-    if "types" in modules and not ts:
-        keys.append("types-js")
+    if "types" in modules:
+        keys.append("types-js")  # @types/node, for node: imports in both stacks
     for key in keys:
         for dep, version in NODE_DEV_DEPS[key].items():
             deps.setdefault(dep, version)

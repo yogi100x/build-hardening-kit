@@ -62,4 +62,12 @@ Status: **Fixed (M2/M3)** with the check that proves it. No bug is open.
 | B50 | `protect-branch.sh owner/repo --dry-run` ignored `--dry-run` and applied the change; it silently dropped existing required checks; bare error without `gh` | Fixed (M4 review) — strict argument parsing, `--replace` needed to drop checks; `test_protect_branch_arguments` |
 | B51 | AGENTS.md named `check` commands that do not exist when no format/lint/types module is on | Fixed (M4 review) — `test_agents_md_names_only_real_commands` |
 | B52 | Protection test compared job ids, not the names GitHub reports, so it could pass for the wrong reason | Fixed (M4 review) — reads `name:` and expands the matrix |
+| B54 | Every TypeScript test written with `node:test` failed lint (`no-floating-promises` on `test()`) | Fixed (M5, stranger test) — `node:test` calls marked safe; fixture `test/sum.test.ts` |
+| B55 | TypeScript installs lacked `@types/node`, so `node:` imports failed the type check | Fixed (M5, stranger test) |
+| B56 | `poe test` ran bare `pytest`, which cannot import root-level modules | Fixed (M5, stranger test) — `python -m pytest` |
+| B57 | `make lint` in a repo with no `origin` remote warned and failed on every issue | Fixed (M5, stranger test) — base only when `origin/<branch>` exists; documented |
+| B58 | An undocumented ruleguard rule banned `fmt.Println` everywhere | Fixed (M5, stranger test) — removed; the file holds the DAL rule only |
+| B59 | revive failed `package main` for a missing package comment | Fixed (M5, stranger test) — excluded for `main.go` |
+| B60 | `make check` left a compiled binary in the repository root | Fixed (M5, stranger test) — `go build -o /dev/null` |
+| B61 | README gave no values for non-interactive answers and no first-run steps (format once, mypy debt) | Fixed (M5, stranger test) |
 | B47 | A repo that already has a kit-managed file (`.pre-commit-config.yaml`, `.golangci.yml`, ...) makes a non-interactive first install stop with a conflict | Open — documented in the README (install interactively); a pre-flight check is a later improvement |
