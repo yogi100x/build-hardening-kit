@@ -32,19 +32,29 @@ yellow() { printf "\033[33m%s\033[0m\n" "$1"; }
 green() { printf "\033[32m%s\033[0m\n" "$1"; }
 
 # copy SRC -> DST (relative to TARGET). Skip if it exists unless FORCE=1.
-# A directory replaces the old one (cp -R into an existing dir would nest it).
-# Returns 0 when it copied, 1 when it skipped.
+# FORCE overwrites only the kit's own files: a directory is merged into the
+# existing one (never deleted, never nested), and a recorded debt baseline is
+# kept. Returns 0 when it copied, 1 when it skipped.
 copy() {
   local src="$1" dst="$TARGET/$2"
-  if [ -e "$dst" ]; then
-    if [ "$FORCE" != "1" ]; then
-      yellow "skip (exists): $2   [FORCE=1 to overwrite]"
-      return 1
-    fi
-    rm -rf "$dst"
+  if [ -e "$dst" ] && [ "$FORCE" != "1" ]; then
+    yellow "skip (exists): $2   [FORCE=1 to overwrite]"
+    return 1
   fi
   mkdir -p "$(dirname "$dst")"
-  cp -R "$src" "$dst"
+  if [ -d "$src" ]; then
+    local keep=""
+    if [ -f "$dst/src/baselines/raw-db-from.json" ]; then
+      keep="$(cat "$dst/src/baselines/raw-db-from.json")"
+    fi
+    mkdir -p "$dst"
+    cp -R "$src/." "$dst/"
+    if [ -n "$keep" ]; then
+      printf '%s\n' "$keep" > "$dst/src/baselines/raw-db-from.json"
+    fi
+  else
+    cp "$src" "$dst"
+  fi
   green "copied: $2"
   return 0
 }
@@ -115,7 +125,7 @@ case "$VARIANT" in
     install_polyglot_common
     copy "$KIT/python/pyproject.snippet.toml" "pyproject.snippet.toml" || true
     copy "$KIT/python/hardening-python.yml" ".github/workflows/hardening-python.yml" || true
-    NEXT="Merge pyproject.snippet.toml into pyproject.toml and delete it. Add the tools: uv add --dev ruff mypy pytest. Then: $PRE_COMMIT && uv run ruff check . && uv run mypy ."
+    NEXT="Merge pyproject.snippet.toml into pyproject.toml and delete it. Add the tools: uv add --dev ruff mypy pytest, and commit uv.lock (CI runs uv sync --locked). Then: $PRE_COMMIT && uv run ruff check . && uv run mypy ."
     ;;
   polyglot)
     install_polyglot_common

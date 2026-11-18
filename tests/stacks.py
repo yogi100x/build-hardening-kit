@@ -327,8 +327,10 @@ STACKS: dict[str, Stack] = {
     ),
     "python": Stack(
         fixture="python",
-        setup=[install("python"), append_pyproject_snippet(), cmd("uv", "sync", "--quiet")],
+        setup=[install("python"), append_pyproject_snippet(), cmd("uv", "lock", "--quiet")],
         gate=[
+            # hardening-python.yml installs with --locked: a stale uv.lock fails.
+            ("deps", ["uv", "sync", "--locked", "--quiet"], ""),
             ("ruff", ["uv", "run", "ruff", "check", "."], ""),
             ("format", ["uv", "run", "ruff", "format", "--check", "."], ""),
             ("mypy", ["uv", "run", "mypy", "."], ""),
@@ -352,7 +354,7 @@ STACKS: dict[str, Stack] = {
             ("vet", ["go", "vet", "./..."], ""),
             ("test", ["go", "test", "./..."], ""),
             ("format", ["golangci-lint", "fmt", "--diff"], ""),
-            ("golangci-lint", ["golangci-lint", "run"], ""),
+            ("golangci-lint", ["golangci-lint", "run", "--new-from-rev=origin/main"], ""),
             PRE_COMMIT_ALL,
             GITLEAKS_POLYGLOT,
         ],

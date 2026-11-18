@@ -8,8 +8,9 @@ fmt:
 fmt-check:
 	golangci-lint fmt --diff
 
+# Only issues new since origin/main fail; existing debt is reported in CI on main.
 lint:
-	golangci-lint run
+	golangci-lint run --new-from-rev=origin/main
 
 vet:
 	go vet ./...

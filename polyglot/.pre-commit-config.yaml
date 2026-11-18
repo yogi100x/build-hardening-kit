@@ -14,12 +14,20 @@ repos:
       - id: check-json
 
   # --- Python ---
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+  # Runs the ruff your project locks (uv run), so the hook and CI never disagree
+  # on formatting after a ruff release.
+  - repo: local
     hooks:
       - id: ruff
-        args: [--fix]
+        name: ruff
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
       - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
 
   # --- Go ---
   - repo: https://github.com/golangci/golangci-lint

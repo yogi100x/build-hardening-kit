@@ -40,9 +40,9 @@ formatters:
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-  # RATCHET: only flag issues introduced since main. Existing debt passes.
-  # Set here only, so local runs and CI agree.
-  new-from-rev: origin/main
+  # The ratchet (only new issues fail) is applied where it is run: `make lint`
+  # passes --new-from-rev=origin/main, and CI uses only-new-issues on pull
+  # requests and a report-only full run on main.
 
 severity:
   default: error

@@ -99,11 +99,40 @@ def test_no_archived_hook_repos() -> None:
 
 
 def test_golangci_config_is_v2() -> None:
-    """B04/B26: v2 schema; new-from-rev set in one place only."""
+    """B04/B26/B37: v2 schema; the ratchet is applied where lint runs, not in config."""
     cfg = load(KIT / "go/.golangci.yml")
     assert cfg.get("version") == "2"
-    assert "new-from-rev" not in (KIT / "go/Makefile.snippet").read_text(encoding="utf-8")
-    assert "fmt --diff" in (KIT / "go/Makefile.snippet").read_text(encoding="utf-8")
+    assert "new-from-rev" not in (cfg.get("issues") or {})
+    make = (KIT / "go/Makefile.snippet").read_text(encoding="utf-8")
+    assert "--new-from-rev=origin/main" in make
+    assert "fmt --diff" in make
+
+
+def test_gitleaks_prs_scan_only_their_commits() -> None:
+    """B36: a full-history scan on every PR fails forever on one old secret."""
+    for path in (
+        KIT / "shared/.github/workflows/hardening-node.yml",
+        KIT / "polyglot/hardening-polyglot.yml",
+    ):
+        text = path.read_text(encoding="utf-8")
+        assert "--log-opts=$BASE_SHA..HEAD" in text, path.name
+
+
+def test_main_reports_debt_without_failing() -> None:
+    """B37: on main, full scans report existing debt instead of turning main red."""
+    poly = load(KIT / "polyglot/hardening-polyglot.yml")
+    full = [s for s in steps(poly) if "full scan" in str(s.get("name", ""))]
+    assert full and all("--error" not in s["run"] for s in full)
+    go = load(KIT / "go/hardening-go.yml")
+    main_lint = [s for s in steps(go) if s.get("if") == "github.event_name != 'pull_request'"]
+    assert main_lint and "--issues-exit-code=0" in main_lint[0]["with"]["args"]
+
+
+def test_python_hooks_use_project_ruff() -> None:
+    """B38: a separately pinned ruff in the hook disagrees with CI's locked ruff."""
+    hooks = load(KIT / "polyglot/.pre-commit-config.yaml")
+    urls = {r["repo"] for r in hooks["repos"]}
+    assert "https://github.com/astral-sh/ruff-pre-commit" not in urls
 
 
 def test_codeowners_has_no_live_placeholder() -> None:

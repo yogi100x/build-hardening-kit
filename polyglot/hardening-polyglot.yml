@@ -35,10 +35,11 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: uvx semgrep@1.186.0 scan --config semgrep/rules.yml --error --baseline-commit "$BASE_SHA"
 
-      # Main and manual runs: full scan, so debt stays visible.
-      - name: Semgrep (full scan)
+      # Main and manual runs: full scan that reports existing debt without
+      # failing (it already passed review; a red main would block nothing).
+      - name: Semgrep (full scan, report only)
         if: github.event_name != 'pull_request'
-        run: uvx semgrep@1.186.0 scan --config semgrep/rules.yml --error
+        run: uvx semgrep@1.186.0 scan --config semgrep/rules.yml
 
   secrets:
     runs-on: ubuntu-latest
@@ -52,8 +53,16 @@ jobs:
           persist-credentials: false
 
       # The gitleaks CLI image, pinned by digest. No licence key needed.
+      # Pull requests scan only their own commits, so an old (rotated) secret in
+      # history does not fail every PR; main scans everything. Accept a known
+      # finding with .gitleaksignore.
       - name: Gitleaks
-        run: >-
-          docker run --rm -v "$PWD:/repo"
-          ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
-          git --no-banner --redact --config /repo/.gitleaks.toml /repo
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          range=()
+          if [ "$EVENT" = pull_request ]; then range=("--log-opts=$BASE_SHA..HEAD"); fi
+          docker run --rm -v "$PWD:/repo" \
+            ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git --no-banner --redact --config /repo/.gitleaks.toml "${range[@]}" /repo
