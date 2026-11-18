@@ -1,0 +1,16 @@
+{
+  "extends": "./jsconfig.hardening.json",
+  "compilerOptions": {
+    "maxNodeModuleJsDepth": 0
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    ".next",
+    "coverage",
+    "tools/hardening",
+    "eslint.hardening.mjs",
+    "**/*.config.*"
+  ]
+}

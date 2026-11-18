@@ -1,0 +1,134 @@
+# build-hardening-kit gate (kept current by `copier update`).
+# Each job runs the same entry point a developer runs locally.
+name: hardening
+
+on:
+  pull_request:
+  push:
+    branches: ["[[ default_branch ]]"]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never cancel runs on the default branch.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/[[ default_branch ]]' }}
+
+jobs:
+[% if node %]
+  node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          cache: npm
+      - run: npm ci
+      - name: Check (format, lint, types)
+        run: npm run check
+      - name: Test
+        run: npm test
+[% endif %]
+[% if py %]
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Install the project and its dev tools from uv.lock
+        run: uv sync --locked
+      - name: Check (format, lint, types)
+        run: uv run poe check
+      - name: Test
+        run: uv run poe test
+[% endif %]
+[% if go %]
+  go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # new-from-rev needs history
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+          install-only: true
+      - name: Check (format, lint, vet, build)
+        if: github.event_name == 'pull_request'
+        run: make check
+      # On [[ default_branch ]], report existing lint debt without failing.
+      - name: Check (format, vet, build; lint report only)
+        if: github.event_name != 'pull_request'
+        run: |
+          golangci-lint run --issues-exit-code=0
+          make check CHECK_LINT=
+      - name: Test
+        run: make test
+[% endif %]
+[% if secrets %]
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # The gitleaks CLI image, pinned by digest; no licence key needed.
+      # Pull requests scan only their own commits, so an old (rotated) secret in
+      # history does not fail every PR; [[ default_branch ]] scans everything.
+      # Accept a known finding with .gitleaksignore.
+      - name: Gitleaks
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          range=()
+          if [ "$EVENT" = pull_request ]; then range=("--log-opts=$BASE_SHA..HEAD"); fi
+          docker run --rm -v "$PWD:/repo" \
+            ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git --no-banner --redact --config /repo/.gitleaks.toml "${range[@]}" /repo
+[% endif %]
+[% if semgrep %]
+  semgrep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      # Pull requests: only findings new since the base commit fail.
+      - name: Semgrep (new findings only)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: uvx semgrep@1.186.0 scan --config .semgrep/hardening.yml --error --baseline-commit "$BASE_SHA"
+      # [[ default_branch ]]: report existing findings without failing.
+      - name: Semgrep (full scan, report only)
+        if: github.event_name != 'pull_request'
+        run: uvx semgrep@1.186.0 scan --config .semgrep/hardening.yml
+[% endif %]

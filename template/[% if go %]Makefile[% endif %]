@@ -1,0 +1,3 @@
+# Your Makefile. The kit's targets (check, fmt, lint, test, ...) come from
+# hardening.mk, which `copier update` keeps current.
+include hardening.mk

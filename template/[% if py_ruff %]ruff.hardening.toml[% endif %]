@@ -1,0 +1,30 @@
+# build-hardening-kit ruff settings. Kept current by `copier update`; put your
+# own settings in ruff.toml (which extends this file).
+# Ruff replaces black + flake8 + isort + pyupgrade + bandit.
+# Adopting on a repo with existing problems: `ruff check --add-noqa .` records
+# them inline once; new problems fail.
+line-length = 100
+
+[lint]
+select = [
+  "E", "F", "W", # pyflakes + pycodestyle
+  "I",           # isort (import order)
+  "UP",          # pyupgrade (modern syntax)
+  "B",           # flake8-bugbear (likely bugs)
+  "C4",          # comprehension simplifications
+  "SIM",         # code simplifications
+  "S",           # flake8-bandit (security)
+  "PTH",         # prefer pathlib over os.path
+  "ASYNC",       # async footguns
+  "RUF",         # ruff-specific
+]
+
+[lint.per-file-ignores]
+# assert is how pytest tests check things
+"**/tests/**" = ["S101"]
+"**/test_*.py" = ["S101"]
+"**/*_test.py" = ["S101"]
+"**/conftest.py" = ["S101"]
+
+[format]
+quote-style = "double"

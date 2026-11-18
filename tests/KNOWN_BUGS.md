@@ -6,22 +6,21 @@ install, which planted case is blocked or missed). The self-test asserts those
 outcomes, so a fix must update the entry in the same change, and anything new
 fails.
 
-Status: **Fixed (M2)** with the check that proves it; **M3** = fixed when the
-custom ratchet and installer are replaced (milestone 3), so not patched here.
+Status: **Fixed (M2/M3)** with the check that proves it. No bug is open.
 
 | Id | Bug | Status |
 |---|---|---|
-| B01 | `[skip-ratchet]` anywhere in a PR title or body switches the ratchet off; any author, or injected text, can do it | M3 — self-test `ts-ratchet-bypass` records it as `missed` |
+| B01 | `[skip-ratchet]` anywhere in a PR title or body switches the ratchet off; any author, or injected text, can do it | Fixed (M3) — custom ratchet replaced by ESLint suppressions; no text bypass exists (`ts-debt-bypass`, `test_no_custom_ratchet_left`) |
 | B02 | Actions pinned by tag, not commit SHA; Node workflow had no `permissions:` | Fixed (M2) — `test_static`: SHA pins, permissions |
 | B03 | semgrep unpinned (`pip install semgrep`, local pre-commit hook) | Fixed (M2) — `test_static::test_no_unpinned_installs` |
 | B04 | golangci config used the v1 schema (v2 refuses it); pre-commit pinned v1.62.2 | Fixed (M2) — `go-clean`, `go-lint`, `test_golangci_config_is_v2` |
-| B05 | Baseline generator counts with a regex, the rule with the AST | M3 (custom ratchet replaced by native suppressions) |
-| B06 | No single local entry point | Partly: `npm run check`, `make check`. Rest in M3 |
+| B05 | Baseline generator counts with a regex, the rule with the AST | Fixed (M3) — generator deleted; ESLint records its own findings (`npx eslint --suppress-all`) |
+| B06 | No single local entry point | Fixed (M3) — `npm run check`, `uv run poe check`, `make check`; CI runs the same (`*-clean` entry steps) |
 | B07 | Python CI installed no project deps or lockfile; Node CI made tests optional | Fixed (M2) — `uv sync --locked`, required `npm test`; `ts-test` |
-| B08 | Env check read only `process.env.X` | Partly (M2): also `process.env["X"]`, `import.meta.env.X`, `export X=` (`ts-env`). Destructuring and non-JS languages: M3 |
+| B08 | Env check read only `process.env.X` | Partly fixed in M2. The bash, JS-only check is not carried into the copier kit (M3); a cross-platform, all-language version is a later module |
 | B09 | `@repo/eslint-plugin` never declared as a dependency | Fixed (M2) — `ts-clean`, `js-clean`, `mono-clean` |
-| B10 | `FORCE=1` reinstall nested directories; `chmod` ran on skipped copies | Fixed (M2) in `install.sh`; installer replaced in M3 |
-| B11 | Ratchet fails open (unreadable JSON = 0, missing main baseline = equal, needs `node`); semgrep on main compared main with itself | Semgrep part fixed (M2: report-only full scan on main, see B37). Ratchet part: M3 |
+| B10 | `FORCE=1` reinstall nested directories; `chmod` ran on skipped copies | Fixed (M2); `install.sh` replaced by copier in M3 (`test_upgrade`) |
+| B11 | Ratchet fails open (unreadable JSON = 0, missing main baseline = equal, needs `node`); semgrep on main compared main with itself | Fixed — semgrep in M2 (B37); ratchet script deleted in M3. ESLint fails on growth and on unrecorded shrinkage (`ts-debt-grow`, `ts-debt-shrink-unrecorded`, `ts-debt-shrink`) |
 | B12 | CodeQL passed `language:` instead of `languages:` | Fixed (M2) — `test_codeql_input_name` |
 | B13 | DAL policy and rule disagreed on directories and Prisma | Fixed (M2) — `ts-dal-prisma`, `ts-dal-dir-exempt`, `test_dal_directories_agree` |
 | B14 | Go/Python CI snippets installed outside `.github/workflows/` | Fixed (M2) — full workflows installed as `hardening-<stack>.yml` |
@@ -32,9 +31,9 @@ custom ratchet and installer are replaced (milestone 3), so not patched here.
 | B19 | A second variant's CI file was silently skipped | Fixed (M2) — `mono-clean` |
 | B20 | `GOOGLE_GRADE.md` cited rules and a coverage gate the kit does not have | Fixed (M2) — `test_docs_cite_only_real_rules` |
 | B21 | CODEOWNERS placeholder owner silently disabled the code-owner requirement | Fixed (M2) — ships commented out; `test_codeowners_has_no_live_placeholder` |
-| B22 | Rule's baseline key depends on `process.cwd()`; `context.getFilename()` deprecated | M3 |
-| B23 | Ratchet counts by position: a new call above old ones flags an old line | M3 |
-| B24 | `/* eslint @repo/no-raw-db-client: off */` bypasses `no-dal-disable` | M3 (with the DAL rule's move to an optional module) |
+| B22 | Rule's baseline key depends on `process.cwd()`; `context.getFilename()` deprecated | Fixed (M3) — no baseline in the rule; uses `context.filename` |
+| B23 | Ratchet counts by position: a new call above old ones flags an old line | Fixed (M3) — ESLint suppressions count per file and rule |
+| B24 | `/* eslint @repo/no-raw-db-client: off */` bypasses `no-dal-disable` | Fixed (M3) — inline config turning the rule off is rejected (`ts-dal-inline-off`) |
 | B25 | Claimed: `go mod tidy` drops the ruleguard DSL | Not reproduced: `go-dal` runs `go mod tidy` and ruleguard still fires. The DSL must be added once (`go get .../dsl`); install now says so |
 | B26 | `make check` rewrote files (`gofmt -w`); no format check; `new-from-rev` set twice | Fixed (M2) — `go-format`, `test_golangci_config_is_v2` |
 | B27 | `mirrors-prettier` archived, pinned to an alpha | Fixed (M2) — maintained mirror; `test_no_archived_hook_repos` |
@@ -44,10 +43,10 @@ custom ratchet and installer are replaced (milestone 3), so not patched here.
 | B31 | Node variants never checked formatting in CI | Fixed (M2) — `format:check`; `ts-format`, `js-format` |
 | B32 | TS/JS variants had no secret scanning | Fixed (M2) — gitleaks job; `ts-secret` |
 | B33 | Installed files failed the kit's own Prettier hook | Fixed (M2) — `python-clean`, `test_installable_files_pass_prettier` |
-| B34 | On Windows the ratchet reads main's baseline from `/tmp` via `node` (`C:\tmp`), so lowering debt is refused | M3 — self-test `ts-ratchet-shrink` records it on Windows |
+| B34 | On Windows the ratchet read main's baseline from `/tmp` via `node` (`C:\tmp`): main read as 0, so a clean install was red | Fixed (M3) — script deleted; Windows CI runs the ESLint debt cases |
 | B35 | `FORCE=1` reinstall deleted whole directories (user hooks, custom rules, the recorded debt baseline) | Fixed (M2) — directories merged, baseline kept |
 | B36 | Gitleaks scanned all history on every PR: one old, rotated secret failed every PR forever | Fixed (M2) — PRs scan their own commits; `test_gitleaks_prs_scan_only_their_commits` |
 | B37 | On main, "only new issues" compared main with itself (golangci) or full scans failed main on existing debt (semgrep) | Fixed (M2) — main reports debt without failing; `test_main_reports_debt_without_failing` |
 | B38 | The pre-commit ruff (pinned v0.8.4) and CI's locked ruff could disagree on formatting | Fixed (M2) — hook runs `uv run ruff`; `test_python_hooks_use_project_ruff` |
 | B53 | On Windows (core.autocrlf=true) files check out with CRLF, so Prettier and gofmt fail on a fresh clone | Fixed (M2) — `.gitattributes` forces LF; Windows CI `*-clean` |
-| B39 | `jsconfig.json` includes only `src`, `apps`, `packages`; code elsewhere is not type-checked (or TS18003) | M3 |
+| B39 | `jsconfig.json` includes only `src`, `apps`, `packages`; code elsewhere is not type-checked (or TS18003) | Fixed (M3) — checks the whole repo except tooling (`js-types-root`) |

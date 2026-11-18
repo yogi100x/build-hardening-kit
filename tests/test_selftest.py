@@ -64,6 +64,7 @@ def test_gate(installed: Installed, case: str) -> None:
     stack = STACKS[stack_name]
 
     if case == "clean":
+        # Entry points (npm run check, uv run poe check, make check) count here.
         expected = expected_clean(stack_name)
         unexpected = {k: v for k, v in clean_failures.items() if k not in expected}
         fixed = sorted(set(expected) - set(clean_failures))

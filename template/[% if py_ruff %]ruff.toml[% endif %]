@@ -1,0 +1,5 @@
+# Your ruff config. The kit's settings live in ruff.hardening.toml, which
+# `copier update` keeps current; override or add settings below.
+# If your settings are in pyproject.toml [tool.ruff], move them here: ruff
+# reads ruff.toml first and ignores [tool.ruff] when it exists.
+extend = "ruff.hardening.toml"

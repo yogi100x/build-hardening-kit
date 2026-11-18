@@ -1,0 +1,11 @@
+# Local entry points (run with `uv run poe check` / `uv run poe test`).
+# CI runs exactly these. Yours to edit after install.
+[tasks]
+[% if 'format' in modules %]format = "ruff format --check ."
+[% endif %][% if 'lint' in modules %]lint = "ruff check ."
+[% endif %][% if py_types %]types = "mypy ."
+[% endif %]test = "pytest -q"
+
+[tasks.check]
+help = "Every gate except tests"
+sequence = [[ ((['format'] if 'format' in modules else []) + (['lint'] if 'lint' in modules else []) + (['types'] if py_types else [])) | tojson ]]

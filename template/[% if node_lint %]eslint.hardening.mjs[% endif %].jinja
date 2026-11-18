@@ -1,0 +1,81 @@
+// build-hardening-kit lint rules. Kept current by `copier update`; put your
+// own settings in eslint.config.mjs instead of editing this file.
+//
+// Adopting on a repo with existing problems: record them once with
+//   npx eslint --suppress-all .
+// (writes eslint-suppressions.json). New problems fail. When you fix a
+// recorded one, lint fails until `npx eslint --prune-suppressions .` lowers
+// the count, so debt only goes down. The suppressions file is code: review it.
+import js from "@eslint/js";
+import globals from "globals";
+[% if 'ts' in stacks -%]
+import tseslint from "typescript-eslint";
+[% endif -%]
+[% if node_arch -%]
+import hardening from "./tools/hardening/index.mjs";
+[% endif %]
+export default [
+  {
+    ignores: [
+      "dist/",
+      "build/",
+      ".next/",
+      "coverage/",
+      ".venv/",
+      "**/*.config.*",
+    ],
+  },
+  { linterOptions: { reportUnusedDisableDirectives: "error" } },
+  js.configs.recommended,
+  {
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: "module",
+      globals: { ...globals.node, ...globals.browser },
+    },
+    rules: {
+      eqeqeq: ["error", "always"],
+      "prefer-const": "error",
+      "no-var": "error",
+      "no-console": ["warn", { allow: ["warn", "error"] }],
+[% if 'js' in stacks %]
+      // Checks TypeScript would otherwise make redundant.
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "no-shadow": "error",
+      "consistent-return": "error",
+      "no-implicit-coercion": "error",
+[% endif %]
+    },
+  },
+  { files: ["**/*.cjs"], languageOptions: { sourceType: "commonjs" } },
+[% if 'ts' in stacks %]
+  ...tseslint.config({
+    files: ["**/*.{ts,tsx,mts,cts}"],
+    extends: [tseslint.configs.recommendedTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/await-thenable": "error",
+    },
+  }),
+[% endif %]
+[% if node_arch %]
+  {
+    plugins: { "@hardening": hardening },
+    rules: {
+      "@hardening/no-raw-db-client": "error",
+      "@hardening/no-dal-disable": "error",
+    },
+  },
+[% endif %]
+];

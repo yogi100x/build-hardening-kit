@@ -1,0 +1,23 @@
+# CODEOWNERS — who must approve changes to which paths (build-hardening-kit).
+# With branch protection's "require review from Code Owners", nothing merges
+# into an owned path without an owner's approval. Last match wins.
+[% if code_owners %]
+*                          [[ code_owners ]]
+
+# Recorded debt: growing it needs an owner's approval, which GitHub records.
+eslint-suppressions.json   [[ code_owners ]]
+.gitleaksignore            [[ code_owners ]]
+.copier-answers.yml        [[ code_owners ]]
+.github/                   [[ code_owners ]]
+[% else %]
+#
+# EDIT BEFORE RELYING ON IT. GitHub silently ignores owners that do not exist,
+# so a placeholder owner makes "require review from Code Owners" enforce
+# nothing. Uncomment and set real users or teams (or re-run
+# `copier update --trust --data code_owners=@your-org/your-team`).
+#
+# *                          @your-org/maintainers
+# eslint-suppressions.json   @your-org/maintainers
+# .gitleaksignore            @your-org/maintainers
+# .github/                   @your-org/maintainers
+[% endif %]

@@ -1,0 +1,9 @@
+# Strict type checking (build-hardening-kit). Yours to edit after install.
+# mypy reads mypy.ini before pyproject.toml [tool.mypy]; keep settings in one place.
+[mypy]
+strict = True
+warn_unreachable = True
+warn_redundant_casts = True
+warn_unused_ignores = True
+show_error_codes = True
+exclude = (?x)(^build/|^dist/|^\.venv/)
