@@ -16,6 +16,11 @@ const CLIENT_NAMES = new Set([
   "knex",
 ]);
 const METHODS = new Set(["from", "query", "rawQuery"]);
+// Prisma is matched on any call: prisma.$queryRaw(...) and model calls like
+// prisma.user.findMany(...).
+const PRISMA = "prisma";
+// Keep in step with DAL_POLICY.md and semgrep/rules.yml.
+const DAL_DIR = /(^|\/)(dal|data-access|data_access)\//;
 
 let baseline = {};
 try {
@@ -44,7 +49,7 @@ module.exports = {
   create(context) {
     const rel = relPath(context.getFilename());
     // The DAL itself is allowed to talk to the client directly.
-    if (/(^|\/)(dal|data-access)\//.test(rel)) return {};
+    if (DAL_DIR.test(rel)) return {};
 
     const allowed = baseline[rel] || 0;
     const found = [];
@@ -53,10 +58,21 @@ module.exports = {
       CallExpression(node) {
         const callee = node.callee;
         if (callee.type !== "MemberExpression") return;
+        const obj = callee.object;
+
+        const isPrisma =
+          (obj.type === "Identifier" && obj.name === PRISMA) ||
+          (obj.type === "MemberExpression" &&
+            obj.object.type === "Identifier" &&
+            obj.object.name === PRISMA);
+        if (isPrisma) {
+          found.push(node);
+          return;
+        }
+
         const prop = callee.property;
         if (prop.type !== "Identifier" || !METHODS.has(prop.name)) return;
 
-        const obj = callee.object;
         const objName =
           obj.type === "Identifier"
             ? obj.name

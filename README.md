@@ -23,7 +23,7 @@ build-hardening-kit/
     .husky/pre-commit             # runs lint-staged
     .prettierrc.json              # pinned defaults (version-stable formatting)
     .prettierignore
-    .github/workflows/ci.yml      # lint -> typecheck -> ratchet -> env -> test -> build
+    .github/workflows/hardening-node.yml  # format -> lint -> typecheck -> ratchet -> env -> test -> build; secrets
     .github/scripts/
       check-env-schema.sh         # every process.env.X must be in .env.example
       check-baseline-shrinkage.sh # baseline count may only shrink (the ratchet gate)
@@ -36,7 +36,7 @@ build-hardening-kit/
   ts/                             # TypeScript variant
     eslint.config.mjs
     tsconfig.json
-    package.snippet.json          # merge scripts + lint-staged + devDeps into your package.json
+    package.snippet.json          # merge scripts + lint-staged + devDeps into your package.json, then delete it
   js/                             # plain-JS variant (uses checkJs for type safety, no .ts files)
     eslint.config.mjs
     jsconfig.json
@@ -50,11 +50,13 @@ build-hardening-kit/
 1. Copy `shared/` contents into your repo root (merge `.github/`, keep `.husky/`).
 2. Copy the chosen variant's `eslint.config.mjs` + `tsconfig.json`/`jsconfig.json` to root.
 3. Copy `shared/eslint-plugin-template/` to `packages/eslint-plugin/` (or wherever; update paths in the CI scripts + snippet).
-4. Merge `<variant>/package.snippet.json` into your root `package.json` (`scripts`, `lint-staged`, `devDependencies`).
+4. Merge `<variant>/package.snippet.json` into your root `package.json` (`scripts`, `lint-staged`, `devDependencies`), then delete the snippet. It declares the plugin as `"@repo/eslint-plugin": "file:packages/eslint-plugin"`; change the path if you put it elsewhere.
 5. `npm install` — the `prepare` script wires Husky automatically.
 6. Seed the ratchet: `npm run baseline:generate` then commit the JSON. Now the count can only go down.
 
-Verify: `npm run lint && npm run typecheck`.
+Verify: `npm run check && npm test` (format, lint, types, then your tests — the same steps CI runs).
+
+The kit tests itself: `tests/` installs every variant into sample repos and proves each gate passes on a clean repo and fails on a planted problem (see `tests/README.md`).
 
 ---
 

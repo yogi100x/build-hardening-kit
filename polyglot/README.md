@@ -30,19 +30,21 @@ polyglot/
   .pre-commit-config.yaml   # one hook runner for every language (incl. shell, Dockerfile)
   semgrep/rules.yml         # custom rules: matches Go + Python + JS/TS + more at once
   .gitleaks.toml            # secret scanning config
-  ci.yml                    # universal semgrep+secrets jobs; paste per-lang jobs in
-../go/                      # .golangci.yml, rules.go (ruleguard), Makefile + CI snippets
-../python/                  # ruff + mypy config, CI snippet
+  hardening-polyglot.yml    # semgrep + secrets workflow -> .github/workflows/
+../go/                      # .golangci.yml, rules.go (ruleguard), Makefile, hardening-go.yml
+../python/                  # ruff + mypy config, hardening-python.yml
 ```
 
 ## Install
 
-1. `pipx install pre-commit && pre-commit install` (root). Now every commit runs the configured linters/formatters/secret-scan for whatever files changed.
+1. `pipx install pre-commit && pre-commit install` (root). Now every commit runs the configured linters/formatters/secret-scan for whatever files changed. Hooks are local feedback only (anyone can skip them); the CI workflows are the gate. The gitleaks hook scans staged changes, so CI's secrets job is what scans the whole history.
 2. Drop `.golangci.yml`+`rules.go` (Go) and `pyproject.snippet.toml` (Python) into the relevant subprojects.
-3. Copy `polyglot/ci.yml` to `.github/workflows/` and paste the `go:`/`python:` jobs from each `ci.snippet.yml`.
+3. `install.sh go|python|polyglot` puts each workflow in `.github/workflows/` under its own name (`hardening-polyglot.yml`, `hardening-go.yml`, `hardening-python.yml`), so stacks can be combined in one repo.
 4. Seed the ratchet implicitly: `--new-from-rev=origin/main` and `--baseline-commit` use git history — nothing to commit; existing debt is grandfathered, new debt fails.
 
 ## Adding more languages
+
+Not shipped or tested by the kit yet — pointers only:
 
 - **Rust:** `rustfmt`, `clippy -D warnings`, `cargo test`; add a `clippy` hook to pre-commit, a `rust` job to CI.
 - **Java/Kotlin:** `spotless` (format) + `errorprone`/`detekt` (lint); semgrep already covers custom rules.

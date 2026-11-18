@@ -1,0 +1,50 @@
+# Go quality gate. Installed as .github/workflows/hardening-go.yml.
+# Reproduce locally with `make check`.
+name: hardening-go
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # new-from-rev needs history
+          persist-credentials: false
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -race ./...
+
+      # Lints and checks formatting (formatters in .golangci.yml).
+      # Pull requests: only issues new since the base fail (the ratchet).
+      - name: golangci-lint (new issues)
+        if: github.event_name == 'pull_request'
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+          only-new-issues: true
+      # Main: report all existing debt without failing.
+      - name: golangci-lint (report all)
+        if: github.event_name != 'pull_request'
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.15.0
+          args: --issues-exit-code=0

@@ -5,7 +5,12 @@ single highest-leverage Google-grade step: "if it's not green, it can't land."
 
 ## One-shot setup (gh CLI)
 
-Replace `OWNER/REPO` and the contexts, then run:
+Replace `OWNER/REPO` and the contexts, then run. Contexts are job names from the
+workflows you installed: `quality` and `secrets` (hardening-node), `python`
+(hardening-python), `go` (hardening-go), `semgrep` and `secrets`
+(hardening-polyglot), `Analyze (<language>)` (CodeQL). Edit `.github/CODEOWNERS`
+first: it ships commented out, and `require_code_owner_reviews` with no real
+owner enforces nothing.
 
 ```bash
 OWNER_REPO="your-org/your-repo"

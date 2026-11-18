@@ -1,15 +1,13 @@
-# golangci-lint config (v1.x schema). For v2 add `version: "2"` and nest under top keys.
-# golangci-lint bundles 50+ linters — this is Go's ESLint-plugin equivalent in one binary.
+# golangci-lint v2 config. golangci-lint bundles 50+ linters and the formatters,
+# so `golangci-lint run` is Go's lint + format gate in one binary.
+version: "2"
+
 run:
   timeout: 5m
 
 linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
   enable:
-    - govet # suspicious constructs
-    - staticcheck # the big one: bugs, perf, simplifications
-    - errcheck # unchecked errors
-    - ineffassign # ineffectual assignments
-    - unused # dead code
     - revive # style + custom rules (golint successor)
     - gosec # security scanner
     - gocritic # opinionated checks + RULEGUARD host (see rules.go)
@@ -18,29 +16,33 @@ linters:
     - sqlclosecheck # unclosed sql.Rows/Stmt
     - errorlint # wrong error wrapping
     - nilerr # returning nil after err check
-    - gci # deterministic import order
     - misspell
+  settings:
+    govet:
+      enable-all: true
+    gocritic:
+      enabled-tags: [diagnostic, performance, style]
+      settings:
+        ruleguard:
+          rules: "${base-path}/rules.go" # custom AST rules, see rules.go
 
-linters-settings:
-  govet:
-    enable-all: true
-  gci:
-    sections:
-      - standard
-      - default
-      - prefix(github.com/yourorg) # <-- set your module path
-  gocritic:
-    enabled-tags: [diagnostic, performance, style]
-    settings:
-      ruleguard:
-        rules: "rules.go" # custom AST rules, see rules.go
+formatters:
+  enable:
+    - gofmt
+    - gci # deterministic import order
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/yourorg) # <-- set your module path
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
-  # RATCHET: only flag issues introduced since main. Existing debt passes —
-  # the built-in equivalent of the baseline JSON in the JS/TS kit.
-  new-from-rev: origin/main
+  # The ratchet (only new issues fail) is applied where it is run: `make lint`
+  # passes --new-from-rev=origin/main, and CI uses only-new-issues on pull
+  # requests and a report-only full run on main.
 
 severity:
-  default-severity: error
+  default: error

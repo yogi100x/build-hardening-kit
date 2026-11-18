@@ -24,7 +24,7 @@ Sources (read them — short): [google/eng-practices](https://github.com/google/
 3. **Complexity** — "can't be understood quickly by readers" = too complex. **Watch for over-engineering** — solve the problem you have *now*, not a speculated future one.
 4. **Tests** — ask for tests with the code change, in the same CL. Tests must actually fail when the code breaks.
 5. **Naming** — clear, not too long/short.
-6. **Comments** — explain **WHY**, not WHAT. (Enforced in-code by the `// WHY:`/`DAL-EXEMPT:` rules.)
+6. **Comments** — explain **WHY**, not WHAT. (The kit enforces this in one place: disabling the DAL rule needs a `// DAL-EXEMPT: <reason>` comment. Everything else is review.)
 7. **Style / consistency** — from the language style guide. `Nit:` if minor. Style is automated (formatter) so review spends zero time here.
 8. **Documentation** — update READMEs/docs when behavior changes.
 9. **Every line** — the reviewer actually read every human-written line (generated/data files exempted).
@@ -71,8 +71,8 @@ Sources (read them — short): [google/eng-practices](https://github.com/google/
 | Google practice | Kit mechanism |
 |-----------------|---------------|
 | Style not discussed in review | auto-formatter (prettier/gofmt/ruff) + `--max-warnings=0` |
-| Comments explain WHY | `any-requires-justification`, `DAL-EXEMPT:` rules |
-| Every invariant tested (Beyoncé) | CI test job + coverage gate |
+| Comments explain WHY | `DAL-EXEMPT:` reason required to disable the DAL rule; the rest is review |
+| Every invariant tested (Beyoncé) | CI test step (`npm test` / `pytest` / `go test`); no coverage gate yet |
 | Presubmit is the arbiter | required status checks (see `docs/BRANCH_PROTECTION.md`) |
 | Reviewed by an owner | `.github/CODEOWNERS` + required-review branch protection |
 | Vetted dependencies | `.github/dependabot.yml` + secret/SAST scans |
