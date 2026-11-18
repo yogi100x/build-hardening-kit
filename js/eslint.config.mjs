@@ -27,4 +27,13 @@ export default [
       "no-console": ["warn", { allow: ["warn", "error"] }],
     },
   },
+  {
+    // The kit's lint plugin is CommonJS; its scripts print progress.
+    files: ["packages/eslint-plugin/**/*.js"],
+    languageOptions: { sourceType: "commonjs" },
+  },
+  {
+    files: ["packages/eslint-plugin/scripts/**"],
+    rules: { "no-console": "off" },
+  },
 ];

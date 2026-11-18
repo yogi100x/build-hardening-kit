@@ -3,10 +3,13 @@
 # merges into an owned path without an owner's approval.
 # Syntax: <path>  <@owner> [@owner2] [@team]
 #
-# Last match wins. Replace the placeholders with real users/teams.
+# EDIT BEFORE RELYING ON IT. GitHub silently ignores owners that do not exist,
+# so with only placeholders, "require review from Code Owners" enforces nothing.
+# Uncomment the default line and replace the placeholder with a real user/team.
+# Last match wins.
 
 # Default owner for everything:
-*                       @your-org/maintainers
+# *                       @your-org/maintainers
 
 # Examples — narrow ownership for sensitive areas:
 # /packages/eslint-plugin/   @your-org/platform

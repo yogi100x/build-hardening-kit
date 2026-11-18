@@ -1,0 +1,59 @@
+# Language-agnostic gates: custom semgrep rules and secret scanning.
+# Installed as .github/workflows/hardening-polyglot.yml next to the per-language
+# workflows (hardening-go.yml, hardening-python.yml, hardening-node.yml).
+name: hardening-polyglot
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  semgrep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      # Pull requests: only findings new since the base commit fail.
+      - name: Semgrep (new findings only)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: uvx semgrep@1.186.0 scan --config semgrep/rules.yml --error --baseline-commit "$BASE_SHA"
+
+      # Main and manual runs: full scan, so debt stays visible.
+      - name: Semgrep (full scan)
+        if: github.event_name != 'pull_request'
+        run: uvx semgrep@1.186.0 scan --config semgrep/rules.yml --error
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The gitleaks CLI image, pinned by digest. No licence key needed.
+      - name: Gitleaks
+        run: >-
+          docker run --rm -v "$PWD:/repo"
+          ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+          git --no-banner --redact --config /repo/.gitleaks.toml /repo

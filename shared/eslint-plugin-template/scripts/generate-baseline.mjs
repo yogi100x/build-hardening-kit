@@ -6,7 +6,8 @@ import path from "node:path";
 
 const ROOTS = ["src", "apps", "packages"];
 const EXT = new Set([".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"]);
-const PATTERN = /\b(supabase|client|db|adminClient|prisma|knex)\.(from|query|rawQuery)\s*\(/g;
+const PATTERN =
+  /\b(?:(?:supabase|client|db|adminClient|knex)\.(?:from|query|rawQuery)|prisma\.(?:\$?\w+)(?:\.\w+)?)\s*\(/g;
 const OUT = "packages/eslint-plugin/src/baselines/raw-db-from.json";
 
 const baseline = {};
@@ -25,7 +26,7 @@ function walk(dir) {
       walk(p);
     } else if (EXT.has(path.extname(entry.name))) {
       const rel = path.relative(process.cwd(), p).split(path.sep).join("/");
-      if (/(^|\/)(dal|data-access)\//.test(rel)) continue;
+      if (/(^|\/)(dal|data-access|data_access)\//.test(rel)) continue;
       const src = fs.readFileSync(p, "utf8");
       const n = (src.match(PATTERN) || []).length;
       if (n > 0) baseline[rel] = n;

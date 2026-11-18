@@ -6,12 +6,12 @@ Why: one place to enforce access control, caching, query shape, and auditing. Ra
 
 ## What's blocked
 
-Outside any `dal/` (or `data_access/`) directory, these fail the build:
+Outside any `dal/`, `data-access/` or `data_access/` directory, these fail the build:
 
 ```ts
 const rows = await db.query("select * from users")       // ❌
 const { data } = await supabase.from("users").select()    // ❌
-await prisma.user.findMany()                              // ❌ (prisma client name matched)
+await prisma.user.findMany()                              // ❌ (any call on prisma, JS/TS only)
 ```
 
 Move them into a DAL function:
@@ -42,7 +42,7 @@ const users = await listUsers();           // ✅
 - **semgrep:** edit `patterns` + `paths.exclude` in `semgrep/rules.yml`.
 
 Default client names matched: `supabase`, `client`, `db`, `adminClient`, `prisma`, `knex`.
-Default DAL paths (exempt): anything under `dal/` or `data_access/`.
+Default DAL paths (exempt): anything under `dal/`, `data-access/` or `data_access/` (ESLint rule, semgrep rule and baseline generator use the same list). The Go ruleguard rule exempts packages whose import path ends in `/dal`.
 
 ## Escape hatch (rare, must be justified)
 

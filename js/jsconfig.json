@@ -1,5 +1,5 @@
 {
-  "_comment": "checkJs turns tsc into a type-checker for plain .js (with JSDoc). Run via: tsc --noEmit -p jsconfig.json",
+  "_comment": "checkJs turns tsc into a type-checker for plain .js (with JSDoc). Run via: tsc --noEmit -p jsconfig.json. The kit's own lint plugin is excluded: it is CommonJS lint-rule code, not your app.",
   "compilerOptions": {
     "checkJs": true,
     "allowJs": true,
@@ -17,5 +17,11 @@
     "noEmit": true
   },
   "include": ["src", "apps", "packages"],
-  "exclude": ["node_modules", "dist", "build", ".next"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    ".next",
+    "packages/eslint-plugin"
+  ]
 }

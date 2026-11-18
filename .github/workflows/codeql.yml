@@ -1,6 +1,7 @@
-# CodeQL SAST — GitHub's free static-analysis (a Tricorder-equivalent).
-# Runs on PRs + a weekly schedule. Findings surface in the Security tab and
-# can block merge if you add the CodeQL check to branch protection.
+# CodeQL SAST — GitHub's free static analysis.
+# Runs on PRs + a weekly schedule. Findings surface in the Security tab. To block
+# merges on findings, set a code-scanning merge protection rule (Settings >
+# Rules); requiring the Analyze job alone only proves the scan ran.
 name: CodeQL
 
 on:
@@ -10,6 +11,8 @@ on:
     branches: [main]
   schedule:
     - cron: "0 6 * * 1" # Monday 06:00 UTC
+
+permissions: {}
 
 jobs:
   analyze:
@@ -25,10 +28,12 @@ jobs:
         # Trim to the languages your repo actually uses.
         language: [javascript-typescript, python, go]
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          language: ${{ matrix.language }}
+          persist-credentials: false
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
           queries: security-and-quality
-      - uses: github/codeql-action/autobuild@v3
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/autobuild@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3

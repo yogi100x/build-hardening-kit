@@ -160,6 +160,42 @@ TS_CASES = {
     "ratchet-bypass": C(
         baseline(3), {"ratchet"}, r"baseline grew", env={"PR_BODY": "[skip-ratchet]"}
     ),
+    "dal-prisma": C(
+        {
+            "src/bad_prisma.ts": (
+                "declare const prisma: { user: { findMany(): Promise<unknown> } };\n"
+                "export const users = prisma.user.findMany();\n"
+            )
+        },
+        {"lint"},
+        r"no-raw-db-client",
+    ),
+    # Every DAL directory spelling the policy names is exempt.
+    "dal-dir-exempt": C(
+        {
+            "src/data_access/users.ts": (
+                "declare const db: { query(sql: string): Promise<unknown> };\n"
+                'export const rows = db.query("select 1");\n'
+            )
+        },
+        {"lint"},
+        must_pass=True,
+    ),
+    "env": C(
+        {"src/bad_env.ts": 'export const url = process.env["UNDECLARED_URL"];\n'},
+        {"env"},
+        r"UNDECLARED_URL",
+    ),
+    "test": C(
+        {
+            "test/bad.test.mjs": (
+                'import { test } from "node:test";\nimport assert from "node:assert/strict";\n\n'
+                'test("planted", () => {\n  assert.equal(1, 2);\n});\n'
+            )
+        },
+        {"test"},
+        r"planted",
+    ),
 }
 
 JS_CASES = {
@@ -205,7 +241,7 @@ PY_CASES = {
         {"pre-commit"},
         r"no-raw-db-query-outside-dal",
     ),
-    "secret": C({"src/app/bad_secret.py": SECRET_LINE}, {"pre-commit"}, GITLEAKS_FAILED),
+    "secret": C({"src/app/bad_secret.py": SECRET_LINE}, {"secrets"}, GITLEAKS_FAILED),
 }
 
 GO_CASES = {
@@ -241,7 +277,7 @@ GO_CASES = {
         r"raw DB query outside dal|no-raw-db-query-outside-dal",
     ),
     "secret": C(
-        {"bad_secret.go": "package main\n\n// " + SECRET_LINE}, {"pre-commit"}, GITLEAKS_FAILED
+        {"bad_secret.go": "package main\n\n// " + SECRET_LINE}, {"secrets"}, GITLEAKS_FAILED
     ),
 }
 
@@ -251,27 +287,42 @@ PRE_COMMIT_ALL: GateStep = (
     "",
 )
 NPM_INSTALL = cmd("npm", "install", "--no-audit", "--no-fund")
+GITLEAKS: GateStep = ("secrets", ["gitleaks", "git", "--no-banner", "--redact", "."], "")
+# hardening-polyglot.yml's secrets job. (The pre-commit gitleaks hook scans
+# staged changes only, so `pre-commit run --all-files` cannot stand in for it.)
+GITLEAKS_POLYGLOT: GateStep = (
+    "secrets",
+    ["gitleaks", "git", "--no-banner", "--redact", "--config", ".gitleaks.toml", "."],
+    "",
+)
+
+
+def node_gate(*extra: GateStep) -> list[GateStep]:
+    """The steps hardening-node.yml runs, in order."""
+    return [
+        ("format", ["npm", "run", "format:check"], ""),
+        ("lint", ["npm", "run", "lint"], ""),
+        ("typecheck", ["npm", "run", "typecheck"], ""),
+        *extra,
+        ("env", ["bash", ".github/scripts/check-env-schema.sh"], ""),
+        ("test", ["npm", "test"], ""),
+        GITLEAKS,
+    ]
+
 
 STACKS: dict[str, Stack] = {
     "ts": Stack(
         fixture="ts",
         setup=[install("ts"), merge_package_snippet(), NPM_INSTALL, write(LEGACY_DEBT)],
-        gate=[
-            ("lint", ["npm", "run", "lint"], ""),
-            ("typecheck", ["npm", "run", "typecheck"], ""),
-            ("ratchet", ["bash", ".github/scripts/check-baseline-shrinkage.sh"], ""),
-        ],
-        tools=["node", "npm", "bash"],
+        gate=node_gate(("ratchet", ["bash", ".github/scripts/check-baseline-shrinkage.sh"], "")),
+        tools=["node", "npm", "bash", "gitleaks"],
         cases=TS_CASES,
     ),
     "js": Stack(
         fixture="js",
         setup=[install("js"), merge_package_snippet(), NPM_INSTALL],
-        gate=[
-            ("lint", ["npm", "run", "lint"], ""),
-            ("typecheck", ["npm", "run", "typecheck"], ""),
-        ],
-        tools=["node", "npm", "bash"],
+        gate=node_gate(),
+        tools=["node", "npm", "bash", "gitleaks"],
         cases=JS_CASES,
     ),
     "python": Stack(
@@ -283,21 +334,29 @@ STACKS: dict[str, Stack] = {
             ("mypy", ["uv", "run", "mypy", "."], ""),
             ("pytest", ["uv", "run", "pytest", "-q"], ""),
             PRE_COMMIT_ALL,
+            GITLEAKS_POLYGLOT,
         ],
-        tools=["uv", "bash", "git"],
+        tools=["uv", "bash", "git", "gitleaks"],
         cases=PY_CASES,
     ),
     "go": Stack(
         fixture="go",
-        setup=[install("go"), set_go_module_prefix("example.com/fixture")],
+        setup=[
+            install("go"),
+            set_go_module_prefix("example.com/fixture"),
+            cmd("go", "get", "github.com/quasilyte/go-ruleguard/dsl@v0.3.23"),
+            cmd("go", "mod", "tidy"),  # B25: must keep the DSL that rules.go imports
+        ],
         gate=[
             ("build", ["go", "build", "./..."], ""),
             ("vet", ["go", "vet", "./..."], ""),
             ("test", ["go", "test", "./..."], ""),
+            ("format", ["golangci-lint", "fmt", "--diff"], ""),
             ("golangci-lint", ["golangci-lint", "run"], ""),
             PRE_COMMIT_ALL,
+            GITLEAKS_POLYGLOT,
         ],
-        tools=["go", "golangci-lint", "bash", "git"],
+        tools=["go", "golangci-lint", "bash", "git", "gitleaks"],
         cases=GO_CASES,
     ),
     # A TS web package and a Python service in one repo, both variants at the root.
