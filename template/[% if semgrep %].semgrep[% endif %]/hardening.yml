@@ -1,0 +1,22 @@
+# Architecture rules for Python and Go (build-hardening-kit; kept current by
+# `copier update`). One semgrep rule file matches many languages.
+# CI fails only on findings new since the base commit (--baseline-commit).
+rules:
+  - id: no-raw-db-query-outside-dal
+    languages: [go, python]
+    severity: ERROR
+    message: >-
+      Raw DB query outside the data-access layer. Move it into a DAL function
+      so access control and query patterns stay centralized.
+    patterns:
+      - pattern-either:
+          - pattern: $DB.query(...)
+          - pattern: $DB.Query(...)
+          - pattern: $DB.execute(...)
+          - pattern: $DB.Exec(...)
+    paths:
+      # Same directory list as the ESLint rule (tools/hardening).
+      exclude:
+        - "**/dal/**"
+        - "**/data_access/**"
+        - "**/data-access/**"

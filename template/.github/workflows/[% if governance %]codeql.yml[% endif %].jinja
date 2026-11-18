@@ -1,0 +1,38 @@
+# CodeQL static analysis (build-hardening-kit; kept current by `copier update`).
+# Findings appear in the Security tab. To block merges on them, add a
+# code-scanning merge protection rule (Settings > Rules); requiring the Analyze
+# job alone only proves the scan ran.
+name: codeql
+
+on:
+  push:
+    branches: ["[[ default_branch ]]"]
+  pull_request:
+    branches: ["[[ default_branch ]]"]
+  schedule:
+    - cron: "0 6 * * 1" # Monday 06:00 UTC
+
+permissions: {}
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [[ ((["javascript-typescript"] if node else []) + (["python"] if py else []) + (["go"] if go else []) + ["actions"]) | tojson ]]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+      - uses: github/codeql-action/autobuild@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3

@@ -1,0 +1,5 @@
+// Your ESLint config. The kit's rules live in eslint.hardening.mjs, which
+// `copier update` keeps current; add your own settings after them.
+import hardening from "./eslint.hardening.mjs";
+
+export default [...hardening];

@@ -1,27 +1,12 @@
-# Automated dependency updates + security alerts (vetted-deps hygiene).
-# Enable Dependabot alerts + security updates in repo Settings > Code security.
+# Dependency updates for the kit repository itself (the template's own
+# dependabot.yml lives in template/.github/).
 version: 2
 updates:
-  - package-ecosystem: npm
-    directory: "/"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 10
-    groups:
-      dev-dependencies:
-        dependency-type: development
-
-  - package-ecosystem: gomod
-    directory: "/"
-    schedule:
-      interval: weekly
-
-  - package-ecosystem: pip
-    directory: "/"
-    schedule:
-      interval: weekly
-
   - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+  - package-ecosystem: uv
     directory: "/"
     schedule:
       interval: weekly

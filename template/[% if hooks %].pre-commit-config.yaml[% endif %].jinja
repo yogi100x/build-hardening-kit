@@ -1,0 +1,79 @@
+# Git hooks (build-hardening-kit; kept current by `copier update`).
+# Install once: uvx pre-commit install   (or: pipx install pre-commit)
+# Hooks are fast local feedback. Anyone can skip them (--no-verify), so the
+# CI workflow is the gate, not this file.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+        exclude: (^|/)eslint-suppressions\.json$ # written by ESLint
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: check-yaml
+      - id: check-json
+        exclude: (^|/)(tsconfig|jsconfig)[^/]*\.json$ # JSONC (comments allowed)
+[% if node_format %]
+
+  # Formats staged files with the Prettier version your package.json locks.
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier
+        entry: npx --no-install prettier --write --ignore-unknown
+        language: system
+        types: [text]
+[% endif %]
+[% if py_ruff %]
+
+  # Runs the ruff your project locks (uv run), so the hook and CI never
+  # disagree after a ruff release.
+  - repo: local
+    hooks:
+[% if 'lint' in modules %]
+      - id: ruff
+        name: ruff
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+[% endif %]
+[% if 'format' in modules %]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+[% endif %]
+[% endif %]
+[% if go %]
+
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.15.0
+    hooks:
+      - id: golangci-lint
+[% endif %]
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+[% if secrets %]
+
+  # Scans what you are about to commit. CI's secrets job scans pushed history.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+[% endif %]
+[% if semgrep %]
+
+  - repo: local
+    hooks:
+      - id: semgrep
+        name: semgrep architecture rules
+        entry: semgrep scan --config .semgrep/hardening.yml --error --skip-unknown-extensions
+        language: python
+        additional_dependencies: [semgrep==1.186.0]
+        pass_filenames: false
+[% endif %]

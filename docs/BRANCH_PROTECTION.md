@@ -5,12 +5,12 @@ single highest-leverage Google-grade step: "if it's not green, it can't land."
 
 ## One-shot setup (gh CLI)
 
-Replace `OWNER/REPO` and the contexts, then run. Contexts are job names from the
-workflows you installed: `quality` and `secrets` (hardening-node), `python`
-(hardening-python), `go` (hardening-go), `semgrep` and `secrets`
-(hardening-polyglot), `Analyze (<language>)` (CodeQL). Edit `.github/CODEOWNERS`
-first: it ships commented out, and `require_code_owner_reviews` with no real
-owner enforces nothing.
+Replace `OWNER/REPO` and the contexts, then run. Contexts are the job names in
+`.github/workflows/hardening.yml` that your stacks and modules created — `node`,
+`python`, `go`, `secrets`, `semgrep` — plus `Analyze (<language>)` from CodeQL.
+Set code owners first (`copier update --trust --data code_owners=@org/team`):
+CODEOWNERS ships commented out without them, and `require_code_owner_reviews`
+with no real owner enforces nothing.
 
 ```bash
 OWNER_REPO="your-org/your-repo"
@@ -21,7 +21,7 @@ gh api -X PUT "repos/$OWNER_REPO/branches/main/protection" \
 {
   "required_status_checks": {
     "strict": true,
-    "contexts": ["quality", "semgrep", "secrets", "Analyze (javascript-typescript)"]
+    "contexts": ["node", "secrets", "Analyze (javascript-typescript)"]
   },
   "enforce_admins": true,
   "required_pull_request_reviews": {

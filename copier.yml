@@ -1,0 +1,188 @@
+# build-hardening-kit — copier template.
+#
+#   Install:  uvx copier copy --trust gh:yogi100x/build-hardening-kit .
+#   Upgrade:  uvx copier update --trust
+#   Add/remove modules later: uvx copier update --trust --data 'modules=[...]'
+#
+# `--trust` is needed because a post-install task (tasks/apply.py) merges npm
+# scripts and dev dependencies into package.json and adds Python dev tools with
+# uv. Read it before trusting it.
+
+_min_copier_version: "9.4.0"
+_subdirectory: template
+_templates_suffix: .jinja
+
+# GitHub Actions uses ${{ }}, so the template uses [[ ]] and [% %] instead.
+_envops:
+  block_start_string: "[%"
+  block_end_string: "%]"
+  variable_start_string: "[["
+  variable_end_string: "]]"
+  comment_start_string: "[#"
+  comment_end_string: "#]"
+  keep_trailing_newline: true
+  # A block tag on its own line leaves no blank line behind.
+  trim_blocks: true
+  lstrip_blocks: true
+
+# Entry files the user owns: created on first install, never overwritten.
+# Each points at a kit-owned file (*.hardening.*) that upgrades keep current.
+_skip_if_exists:
+  - eslint.config.mjs
+  - tsconfig.json
+  - jsconfig.json
+  - Makefile
+  - ruff.toml
+  - mypy.ini
+  - poe_tasks.toml
+  - .prettierignore
+  - .gitleaks.toml
+  - .gitattributes
+
+_tasks:
+  - command:
+      - "[[ _copier_python ]]"
+      - "[[ _copier_conf.src_path ]]/tasks/apply.py"
+      - "[[ {'stacks': stacks, 'modules': modules, 'node_package_manager': node_package_manager} | tojson ]]"
+
+stacks:
+  type: str
+  help: Which stacks does this repository use? (space to select)
+  multiselect: true
+  choices:
+    TypeScript: ts
+    JavaScript (type-checked with JSDoc): js
+    Python (uv): python
+    Go: go
+  validator: >-
+    [% if not stacks %]Pick at least one stack.[% endif %]
+    [% if 'ts' in stacks and 'js' in stacks %]Pick TypeScript or JavaScript, not
+    both (a TypeScript project can hold .js files).[% endif %]
+
+preset:
+  type: str
+  help: Preset (the next question lets you add or remove single modules)
+  choices:
+    minimal - format, lint, types, secret scan, CI: minimal
+    standard - minimal + git hooks + governance (CODEOWNERS, Dependabot, CodeQL): standard
+  default: standard
+
+modules:
+  type: str
+  help: Modules to install
+  multiselect: true
+  choices:
+    format - formatter check: format
+    lint - linter, warnings are errors: lint
+    types - strict type checking: types
+    secrets - gitleaks secret scan: secrets
+    ci - one GitHub Actions workflow running the gate: ci
+    hooks - pre-commit git hooks (local feedback only): hooks
+    governance - CODEOWNERS, Dependabot, CodeQL: governance
+    arch-rules - example architecture rule (no raw DB queries outside dal/): arch-rules
+  default: >-
+    [[ ['format', 'lint', 'types', 'secrets', 'ci']
+       + (['hooks', 'governance'] if preset == 'standard' else []) ]]
+
+node_package_manager:
+  type: str
+  help: Node package manager (the lockfile CI installs from)
+  choices: [npm, pnpm, yarn]
+  default: npm
+  when: "[[ 'ts' in stacks or 'js' in stacks ]]"
+
+default_branch:
+  type: str
+  help: Default branch (CI runs on pushes to it; "only new issues" compares against it)
+  default: main
+
+go_module:
+  type: str
+  help: Go module path, as in go.mod (its imports are grouped last; blank to skip)
+  when: "[[ 'go' in stacks ]]"
+  default: ""
+
+code_owners:
+  type: str
+  help: >-
+    Default code owners, e.g. "@my-org/maintainers". Blank ships CODEOWNERS
+    commented out: a placeholder owner would silently enforce nothing.
+  when: "[[ 'governance' in modules ]]"
+  default: ""
+
+# ---- Computed: not asked, not stored ----
+node:
+  type: bool
+  default: "[[ 'ts' in stacks or 'js' in stacks ]]"
+  when: false
+node_format:
+  type: bool
+  default: "[[ node and 'format' in modules ]]"
+  when: false
+node_lint:
+  type: bool
+  default: "[[ node and 'lint' in modules ]]"
+  when: false
+ts_types:
+  type: bool
+  default: "[[ 'ts' in stacks and ('types' in modules or 'lint' in modules) ]]"
+  when: false
+js_types:
+  type: bool
+  default: "[[ 'js' in stacks and 'types' in modules ]]"
+  when: false
+node_arch:
+  type: bool
+  default: "[[ node_lint and 'arch-rules' in modules ]]"
+  when: false
+py:
+  type: bool
+  default: "[[ 'python' in stacks ]]"
+  when: false
+py_ruff:
+  type: bool
+  default: "[[ py and ('lint' in modules or 'format' in modules) ]]"
+  when: false
+py_types:
+  type: bool
+  default: "[[ py and 'types' in modules ]]"
+  when: false
+go:
+  type: bool
+  default: "[[ 'go' in stacks ]]"
+  when: false
+go_arch:
+  type: bool
+  default: "[[ go and 'arch-rules' in modules ]]"
+  when: false
+semgrep:
+  type: bool
+  default: "[[ 'arch-rules' in modules and (py or go) ]]"
+  when: false
+secrets:
+  type: bool
+  default: "[[ 'secrets' in modules ]]"
+  when: false
+ci:
+  type: bool
+  default: "[[ 'ci' in modules ]]"
+  when: false
+hooks:
+  type: bool
+  default: "[[ 'hooks' in modules ]]"
+  when: false
+governance:
+  type: bool
+  default: "[[ 'governance' in modules ]]"
+  when: false
+fmt:
+  type: bool
+  default: "[[ 'format' in modules ]]"
+  when: false
+gate_parts:
+  type: str
+  default: >-
+    [[ ((['formatting'] if 'format' in modules else [])
+       + (['lint'] if 'lint' in modules else [])
+       + (['types'] if 'types' in modules else [])) | join(', ') ]]
+  when: false

@@ -30,6 +30,7 @@ UVX_PINS = {
     "pre-commit": "pre-commit@4.7.0",
     "semgrep": "semgrep@1.186.0",
     "zizmor": "zizmor@1.32.0",
+    "copier": "copier@9.19.1",
 }
 
 
@@ -58,8 +59,9 @@ def tool(name: str) -> list[str]:
 
 
 def run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None, timeout: int = 900) -> Result:
-    # PR_* would leak a developer's own PR text into the ratchet; drop it.
-    base = {k: v for k, v in os.environ.items() if not k.startswith("PR_")}
+    # PR_* would leak a developer's own PR text into the gate; VIRTUAL_ENV would
+    # point a fixture's `uv run` at the harness's own venv. Drop both.
+    base = {k: v for k, v in os.environ.items() if not k.startswith("PR_") and k != "VIRTUAL_ENV"}
     full_env = {**base, "TZ": "UTC", "CI": "1", **(env or {})}
     proc = subprocess.run(
         cmd,

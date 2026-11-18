@@ -1,10 +1,13 @@
-"""Static checks on the kit's own files: things a fixture run cannot see.
+"""Static checks on what the kit renders, for things a fixture run cannot see.
 
-Each check names the bug it guards (tests/KNOWN_BUGS.md).
+The template is rendered (tasks skipped) for every stack and both presets, and
+the checks run on the rendered files and on the kit's own workflows. Each check
+names the bug it guards (tests/KNOWN_BUGS.md).
 """
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -12,14 +15,46 @@ import pytest
 import yaml
 from harness import KIT, run, tool
 
-WORKFLOWS = sorted(
-    [
-        *KIT.glob(".github/workflows/*.yml"),
-        *KIT.glob("shared/.github/workflows/*.yml"),
-        *KIT.glob("*/hardening-*.yml"),
-    ]
-)
 SHA = re.compile(r"^[^@\s]+@[0-9a-f]{40}$")
+ALL = ["format", "lint", "types", "secrets", "ci", "hooks", "governance", "arch-rules"]
+RENDERS = {
+    "ts-py-go-all": (["ts", "python", "go"], ALL, {"go_module": "example.com/x"}),
+    "js-all": (["js"], ALL, {}),
+    "py-owners": (["python"], ALL, {"code_owners": "@acme/core"}),
+    "ts-minimal": (["ts"], None, {"preset": "minimal"}),
+    "ts-pnpm": (["ts"], None, {"node_package_manager": "pnpm"}),
+    "py-ci-only": (["python"], ["secrets", "ci"], {}),
+}
+
+
+def render(dest: Path, stacks: list[str], modules: list[str] | None, data: dict[str, str]) -> Path:
+    args = ["--data", f"stacks={json.dumps(stacks)}"]
+    if modules is not None:
+        args += ["--data", f"modules={json.dumps(modules)}"]
+    for key, value in data.items():
+        args += ["--data", f"{key}={value}"]
+    res = run(
+        [
+            *tool("copier"),
+            "copy",
+            "--trust",
+            "--defaults",
+            "--skip-tasks",
+            "--vcs-ref",
+            "HEAD",
+            *args,
+            str(KIT),
+            str(dest),
+        ],
+        KIT,
+    )
+    assert res.ok, res.out
+    return dest
+
+
+@pytest.fixture(scope="module")
+def rendered(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
+    return {name: render(tmp_path_factory.mktemp(name), *spec) for name, spec in RENDERS.items()}
 
 
 def load(path: Path) -> dict:
@@ -30,131 +65,158 @@ def steps(wf: dict) -> list[dict]:
     return [s for job in wf.get("jobs", {}).values() for s in job.get("steps", [])]
 
 
-def test_workflows_found() -> None:
-    names = {p.name for p in WORKFLOWS}
-    assert {"hardening-node.yml", "hardening-go.yml", "hardening-python.yml"} <= names
-    assert {"hardening-polyglot.yml", "codeql.yml", "self-test.yml"} <= names
+def workflows(rendered: dict[str, Path]) -> list[Path]:
+    out = sorted(KIT.glob(".github/workflows/*.yml"))
+    for root in rendered.values():
+        out += sorted(root.glob(".github/workflows/*.yml"))
+    return out
 
 
-@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
-def test_actions_pinned_by_sha(path: Path) -> None:
-    """B02: a tag can be moved to other code; a commit SHA cannot."""
-    for step in steps(load(path)):
-        uses = step.get("uses")
-        if uses and not uses.startswith("./"):
-            assert SHA.match(uses), f"{path.name}: '{uses}' is not pinned to a commit SHA"
+def test_render_contents(rendered: dict[str, Path]) -> None:
+    """Modules decide files; minimal leaves out hooks and governance."""
+    full = rendered["ts-py-go-all"]
+    for rel in [
+        ".github/workflows/hardening.yml",
+        ".github/workflows/codeql.yml",
+        ".github/CODEOWNERS",
+        ".github/dependabot.yml",
+        ".pre-commit-config.yaml",
+        ".gitleaks.toml",
+        "eslint.config.mjs",
+        "eslint.hardening.mjs",
+        "tsconfig.json",
+        "tsconfig.hardening.json",
+        "tools/hardening/index.mjs",
+        "ruff.toml",
+        "ruff.hardening.toml",
+        "mypy.ini",
+        "poe_tasks.toml",
+        ".golangci.yml",
+        "hardening.mk",
+        "Makefile",
+        "hardening_rules.go",
+        ".semgrep/hardening.yml",
+        ".copier-answers.yml",
+        ".gitattributes",
+    ]:
+        assert (full / rel).is_file(), rel
+    minimal = rendered["ts-minimal"]
+    for rel in [".pre-commit-config.yaml", ".github/CODEOWNERS", "tools", ".semgrep"]:
+        assert not (minimal / rel).exists(), rel
+    assert (minimal / ".github/workflows/hardening.yml").is_file()
 
 
-@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
-def test_least_privilege_permissions(path: Path) -> None:
-    """B02: top-level permissions empty; each job asks for what it needs."""
-    wf = load(path)
-    assert wf.get("permissions") == {}, f"{path.name}: top-level permissions must be {{}}"
-    for name, job in wf.get("jobs", {}).items():
-        assert "permissions" in job, f"{path.name}: job '{name}' declares no permissions"
+def test_rendered_files_parse(rendered: dict[str, Path]) -> None:
+    """Every rendered YAML/JSON file is valid (template logic cannot break syntax)."""
+    for root in rendered.values():
+        for path in [*root.rglob("*.yml"), *root.rglob("*.yaml"), *root.glob(".*.yml")]:
+            load(path)
+        for path in root.rglob("*.json"):
+            json.loads(path.read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
-def test_main_runs_never_cancelled(path: Path) -> None:
-    """B30: a cancelled main run records nothing for later PRs to compare against."""
-    group = load(path).get("concurrency") or {}
-    cancel = group.get("cancel-in-progress", False) if isinstance(group, dict) else False
-    assert cancel is not True, f"{path.name}: cancel-in-progress must exclude main"
+def test_workflows_pinned_and_least_privilege(rendered: dict[str, Path]) -> None:
+    """B02/B30: SHA pins, empty top-level permissions, per-job grants, no main cancels."""
+    for path in workflows(rendered):
+        wf = load(path)
+        assert wf.get("permissions") == {}, f"{path}: top-level permissions must be {{}}"
+        for name, job in wf["jobs"].items():
+            assert "permissions" in job, f"{path}: job {name} declares no permissions"
+        group = wf.get("concurrency") or {}
+        assert not (isinstance(group, dict) and group.get("cancel-in-progress") is True), path
+        for step in steps(wf):
+            uses = step.get("uses")
+            if uses and not uses.startswith("./"):
+                assert SHA.match(uses), f"{path}: '{uses}' not pinned to a commit SHA"
+            if str(uses).startswith("actions/checkout@"):
+                assert (step.get("with") or {}).get("persist-credentials") is False, path
+            script = str(step.get("run", ""))
+            assert not re.search(r"pip install (?![^\n]*==)", script), f"{path}: {script}"
+            for m in re.finditer(r"uvx (\S+)", script):
+                assert "@" in m.group(1), f"{path}: uvx {m.group(1)} has no version"
 
 
-@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
-def test_checkout_drops_credentials(path: Path) -> None:
-    for step in steps(load(path)):
-        if str(step.get("uses", "")).startswith("actions/checkout@"):
-            assert (step.get("with") or {}).get("persist-credentials") is False, path.name
+def test_package_manager_follows_the_answer(rendered: dict[str, Path]) -> None:
+    """Review finding: npm-only CI broke pnpm and yarn repos."""
+    text = (rendered["ts-pnpm"] / ".github/workflows/hardening.yml").read_text()
+    assert "pnpm install --frozen-lockfile" in text and "npm ci" not in text
+    assert "cache: pnpm" in text
+    npm = (rendered["ts-minimal"] / ".github/workflows/hardening.yml").read_text()
+    assert "npm ci" in npm and "pnpm" not in npm
 
 
-def test_codeql_input_name() -> None:
+def test_no_check_step_without_check_modules(rendered: dict[str, Path]) -> None:
+    """With only secrets + ci, there is no empty `check` to run."""
+    root = rendered["py-ci-only"]
+    assert "poe check" not in (root / ".github/workflows/hardening.yml").read_text()
+    assert "[tasks.check]" not in (root / "poe_tasks.toml").read_text()
+
+
+def test_codeql_uses_languages_input(rendered: dict[str, Path]) -> None:
     """B12: the init action reads `languages`; `language` is silently ignored."""
-    for step in steps(load(KIT / ".github/workflows/codeql.yml")):
+    wf = load(rendered["ts-py-go-all"] / ".github/workflows/codeql.yml")
+    langs = wf["jobs"]["analyze"]["strategy"]["matrix"]["language"]
+    assert langs == ["javascript-typescript", "python", "go", "actions"]
+    for step in steps(wf):
         if "codeql-action/init" in str(step.get("uses", "")):
             assert "languages" in step["with"] and "language" not in step["with"]
 
 
-def test_no_unpinned_installs() -> None:
-    """B03/B29: every tool fetched in CI or hooks has an exact version."""
-    for path in WORKFLOWS:
-        for step in steps(load(path)):
-            script = str(step.get("run", ""))
-            assert not re.search(r"pip install (?![^\n]*==)", script), f"{path.name}: {script}"
-            for m in re.finditer(r"uvx (\S+)", script):
-                assert "@" in m.group(1), f"{path.name}: uvx {m.group(1)} has no version"
-    hooks = load(KIT / "polyglot/.pre-commit-config.yaml")
+def test_hooks_pinned_current_and_project_tools(rendered: dict[str, Path]) -> None:
+    """B03/B27/B38: no archived mirrors; ruff and prettier come from the project lock."""
+    hooks = load(rendered["ts-py-go-all"] / ".pre-commit-config.yaml")
+    urls = {r["repo"] for r in hooks["repos"]}
+    assert "https://github.com/pre-commit/mirrors-prettier" not in urls
+    assert "https://github.com/astral-sh/ruff-pre-commit" not in urls
     for repo in hooks["repos"]:
         for hook in repo["hooks"]:
             for dep in hook.get("additional_dependencies", []):
-                assert "==" in dep, f"pre-commit hook {hook['id']}: '{dep}' not pinned"
+                assert "==" in dep, f"hook {hook['id']}: '{dep}' not pinned"
 
 
-def test_no_archived_hook_repos() -> None:
-    """B27: pre-commit/mirrors-prettier is archived."""
-    hooks = load(KIT / "polyglot/.pre-commit-config.yaml")
-    urls = {r["repo"] for r in hooks["repos"]}
-    assert "https://github.com/pre-commit/mirrors-prettier" not in urls
-
-
-def test_golangci_config_is_v2() -> None:
-    """B04/B26/B37: v2 schema; the ratchet is applied where lint runs, not in config."""
-    cfg = load(KIT / "go/.golangci.yml")
-    assert cfg.get("version") == "2"
+def test_go_ratchet_where_lint_runs(rendered: dict[str, Path]) -> None:
+    """B04/B26/B37: v2 config; ratchet in make lint; make check never writes."""
+    root = rendered["ts-py-go-all"]
+    cfg = load(root / ".golangci.yml")
+    assert cfg["version"] == "2"
     assert "new-from-rev" not in (cfg.get("issues") or {})
-    make = (KIT / "go/Makefile.snippet").read_text(encoding="utf-8")
-    assert "--new-from-rev=origin/main" in make
-    assert "fmt --diff" in make
+    assert "prefix(example.com/x)" in cfg["formatters"]["settings"]["gci"]["sections"]
+    make = (root / "hardening.mk").read_text(encoding="utf-8")
+    assert "--new-from-rev=origin/main" in make and "fmt --diff" in make
+    assert re.search(r"^check:.*fmt-check.*\$\(CHECK_LINT\)", make, re.MULTILINE)
 
 
-def test_gitleaks_prs_scan_only_their_commits() -> None:
-    """B36: a full-history scan on every PR fails forever on one old secret."""
-    for path in (
-        KIT / "shared/.github/workflows/hardening-node.yml",
-        KIT / "polyglot/hardening-polyglot.yml",
-    ):
-        text = path.read_text(encoding="utf-8")
-        assert "--log-opts=$BASE_SHA..HEAD" in text, path.name
+def test_main_reports_debt_without_failing(rendered: dict[str, Path]) -> None:
+    """B36/B37: PR scans are new-only; the default branch reports debt, never red."""
+    wf = load(rendered["ts-py-go-all"] / ".github/workflows/hardening.yml")
+    text = (rendered["ts-py-go-all"] / ".github/workflows/hardening.yml").read_text()
+    assert "--log-opts=$BASE_SHA..HEAD" in text
+    for step in steps(wf):
+        if step.get("if") == "github.event_name != 'pull_request'":
+            run_ = step.get("run", "")
+            assert "--error" not in run_, step
+            if "golangci-lint run" in run_:
+                assert "--issues-exit-code=0" in run_
 
 
-def test_main_reports_debt_without_failing() -> None:
-    """B37: on main, full scans report existing debt instead of turning main red."""
-    poly = load(KIT / "polyglot/hardening-polyglot.yml")
-    full = [s for s in steps(poly) if "full scan" in str(s.get("name", ""))]
-    assert full and all("--error" not in s["run"] for s in full)
-    go = load(KIT / "go/hardening-go.yml")
-    main_lint = [s for s in steps(go) if s.get("if") == "github.event_name != 'pull_request'"]
-    assert main_lint and "--issues-exit-code=0" in main_lint[0]["with"]["args"]
-
-
-def test_python_hooks_use_project_ruff() -> None:
-    """B38: a separately pinned ruff in the hook disagrees with CI's locked ruff."""
-    hooks = load(KIT / "polyglot/.pre-commit-config.yaml")
-    urls = {r["repo"] for r in hooks["repos"]}
-    assert "https://github.com/astral-sh/ruff-pre-commit" not in urls
-
-
-def test_codeowners_has_no_live_placeholder() -> None:
+def test_codeowners_never_ships_a_live_placeholder(rendered: dict[str, Path]) -> None:
     """B21: a nonexistent owner makes GitHub skip the code-owner requirement."""
-    for line in (KIT / ".github/CODEOWNERS").read_text(encoding="utf-8").splitlines():
-        if line.strip() and not line.lstrip().startswith("#"):
-            assert "your-org" not in line, f"live placeholder owner: {line}"
+    blank = (rendered["ts-py-go-all"] / ".github/CODEOWNERS").read_text(encoding="utf-8")
+    live = [ln for ln in blank.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    assert live == []
+    owned = (rendered["py-owners"] / ".github/CODEOWNERS").read_text(encoding="utf-8")
+    assert "*                          @acme/core" in owned
+    assert "eslint-suppressions.json   @acme/core" in owned
 
 
-def test_dal_directories_agree() -> None:
-    """B13: policy, ESLint rule, baseline generator and semgrep exempt the same dirs."""
-    names = {"dal", "data-access", "data_access"}
-    rule = (KIT / "shared/eslint-plugin-template/src/rules/no-raw-db-client.js").read_text(
-        encoding="utf-8"
-    )
-    gen = (KIT / "shared/eslint-plugin-template/scripts/generate-baseline.mjs").read_text(
-        encoding="utf-8"
-    )
-    semgrep = (KIT / "polyglot/semgrep/rules.yml").read_text(encoding="utf-8")
+def test_dal_directories_agree(rendered: dict[str, Path]) -> None:
+    """B13: policy, ESLint rule and semgrep exempt the same directories."""
+    root = rendered["ts-py-go-all"]
+    rule = (root / "tools/hardening/no-raw-db-client.mjs").read_text(encoding="utf-8")
+    semgrep = (root / ".semgrep/hardening.yml").read_text(encoding="utf-8")
     policy = (KIT / "DAL_POLICY.md").read_text(encoding="utf-8")
-    for name in names:
-        assert name in rule and name in gen, name
+    for name in ("dal", "data-access", "data_access"):
+        assert name in rule, name
         assert f"**/{name}/**" in semgrep, name
         assert f"`{name}/`" in policy, name
 
@@ -167,36 +229,10 @@ def test_docs_cite_only_real_rules() -> None:
     assert "coverage gate |" not in text
 
 
-def test_installable_files_pass_prettier() -> None:
-    """B33: the kit's own formatter must accept every file it installs."""
-    npx = tool("npx")
-    files = [
-        "ts/eslint.config.mjs",
-        "ts/tsconfig.json",
-        "ts/package.snippet.json",
-        "js/eslint.config.mjs",
-        "js/jsconfig.json",
-        "js/package.snippet.json",
-        "go/hardening-go.yml",
-        "go/.golangci.yml",
-        "python/hardening-python.yml",
-        "polyglot/hardening-polyglot.yml",
-        "polyglot/.pre-commit-config.yaml",
-        "polyglot/semgrep/rules.yml",
-        "shared/.github/workflows/hardening-node.yml",
-        ".github/workflows/codeql.yml",
-        ".github/dependabot.yml",
-    ]
-    res = run(
-        [
-            *npx,
-            "--yes",
-            "prettier@3.10.1",
-            "--config",
-            "shared/.prettierrc.json",
-            "--check",
-            *files,
-        ],
-        KIT,
-    )
-    assert res.ok, res.out
+def test_no_custom_ratchet_left() -> None:
+    """B01/B05/B11/B22/B23/B34: the custom baseline ratchet is gone for good."""
+    for path in KIT.joinpath("template").rglob("*"):
+        if path.is_file():
+            text = path.read_text(encoding="utf-8", errors="replace")
+            assert "skip-ratchet" not in text, path
+            assert "raw-db-from.json" not in text, path

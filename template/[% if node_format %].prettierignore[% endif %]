@@ -1,0 +1,14 @@
+node_modules
+dist
+build
+.next
+coverage
+*.min.js
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+eslint-suppressions.json
+.copier-answers.yml
+.venv
+uv.lock
+go.sum

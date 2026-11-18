@@ -1,69 +1,53 @@
 """What each stack installs, how it is set up, and which commands are its gate.
 
-This table follows the kit's own documentation (README, install.sh NEXT lines,
-CI snippets) so the self-test checks what a user following the docs gets.
+The gate follows what the kit documents and its CI workflow runs, so the
+self-test checks exactly what a user gets.
 """
 
 from __future__ import annotations
 
 import json
 import re
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from harness import KIT, Repo, bash, run, tool
+from harness import IS_WINDOWS, KIT, Repo, run, tool
 
 Step = Callable[[Repo], None]
-GateStep = tuple[str, list[str], str]  # (label, argv, cwd relative to repo root)
+# (label, argv, cwd relative to repo root). Labels starting with "entry:" are the
+# documented entry points (npm run check, uv run poe check, make check): they run
+# on the clean repo only; planted cases target the individual steps.
+GateStep = tuple[str, list[str], str]
+
+ALL_MODULES = ["format", "lint", "types", "secrets", "ci", "hooks", "governance", "arch-rules"]
 
 
-def install(variant: str, subdir: str = "") -> Step:
+def copier_copy(stacks: list[str], modules: list[str] | None = None, **data: str) -> Step:
+    """Install the kit the documented way: copier copy --trust."""
+
     def step(repo: Repo) -> None:
-        target = repo.path / subdir if subdir else repo.path
-        res = run([*bash(), str(KIT / "install.sh"), variant, str(target)], repo.path)
+        args = ["--data", f"stacks={json.dumps(stacks)}"]
+        args += ["--data", f"modules={json.dumps(modules or ALL_MODULES)}"]
+        for key, value in data.items():
+            args += ["--data", f"{key}={value}"]
+        res = run(
+            [
+                *tool("copier"),
+                "copy",
+                "--trust",
+                "--defaults",
+                "--vcs-ref",
+                "HEAD",
+                *args,
+                str(KIT),
+                str(repo.path),
+            ],
+            repo.path,
+            timeout=1200,
+        )
         if not res.ok:
-            raise RuntimeError(f"install.sh {variant} failed:\n{res.out}")
-
-    return step
-
-
-def merge_package_snippet(subdir: str = "") -> Step:
-    """README step 4: merge package.snippet.json into package.json."""
-
-    def step(repo: Repo) -> None:
-        root = repo.path / subdir if subdir else repo.path
-        pkg_path, snip_path = root / "package.json", root / "package.snippet.json"
-        pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
-        snip = json.loads(snip_path.read_text(encoding="utf-8"))
-        for key in ("scripts", "devDependencies"):
-            pkg[key] = {**pkg.get(key, {}), **snip.get(key, {})}
-        pkg["lint-staged"] = snip.get("lint-staged", {})
-        pkg_path.write_text(json.dumps(pkg, indent=2) + "\n", encoding="utf-8", newline="\n")
-        snip_path.unlink()
-
-    return step
-
-
-def append_pyproject_snippet(subdir: str = "") -> Step:
-    """install.sh NEXT: merge pyproject.snippet.toml into pyproject.toml."""
-
-    def step(repo: Repo) -> None:
-        root = repo.path / subdir if subdir else repo.path
-        snip = root / "pyproject.snippet.toml"
-        with (root / "pyproject.toml").open("a", encoding="utf-8", newline="\n") as fh:
-            fh.write("\n" + snip.read_text(encoding="utf-8"))
-        snip.unlink()
-
-    return step
-
-
-def set_go_module_prefix(module: str) -> Step:
-    """install.sh NEXT: set your module path in .golangci.yml."""
-
-    def step(repo: Repo) -> None:
-        cfg = repo.path / ".golangci.yml"
-        text = cfg.read_text(encoding="utf-8").replace("github.com/yourorg", module)
-        cfg.write_text(text, encoding="utf-8", newline="\n")
+            raise RuntimeError(f"copier copy failed:\n{res.out}")
 
     return step
 
@@ -111,23 +95,20 @@ class Stack:
 
 
 SECRET_LINE = 'AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYzXq9Lr4Tq2"\n'
-GITLEAKS_FAILED = r"Detect hardcoded secrets\.+Failed|leaks found"
-BASELINE = "packages/eslint-plugin/src/baselines/raw-db-from.json"
+GITLEAKS_FAILED = r"leaks found"
+RAW_DB_DECL = "declare const db: { query(sql: string): Promise<unknown> };\n"
 
 
-def baseline(count: int) -> dict[str, str]:
-    return {BASELINE: json.dumps({"src/legacy.ts": count}, indent=2) + "\n"}
+def legacy(calls: int) -> str:
+    """A file with recorded architecture debt: `calls` raw DB calls."""
+    body = "".join(f'export const q{i} = db.query("select {i}");\n' for i in range(calls))
+    return RAW_DB_DECL + body
 
 
-# Main records debt of 2, so growth and shrinkage are both measurable.
-LEGACY_DEBT = {
-    "src/legacy.ts": (
-        "declare const db: { query(sql: string): Promise<unknown> };\n"
-        'export const a = db.query("select 1");\n'
-        'export const b = db.query("select 2");\n'
-    ),
-    **baseline(2),
-}
+def suppressions(calls: int) -> str:
+    data = {"src/legacy.ts": {"@hardening/no-raw-db-client": {"count": calls}}}
+    return json.dumps(data, indent=2)
+
 
 C = Case
 
@@ -144,21 +125,9 @@ TS_CASES = {
     ),
     "format": C({"src/bad_format.ts": "export const   spaced =1\n"}, {"format"}, r"bad_format"),
     "dal": C(
-        {
-            "src/bad_dal.ts": (
-                "declare const db: { query(sql: string): Promise<unknown> };\n"
-                'export const rows = db.query("select 1");\n'
-            )
-        },
+        {"src/bad_dal.ts": RAW_DB_DECL + 'export const rows = db.query("select 1");\n'},
         {"lint"},
         r"no-raw-db-client",
-    ),
-    "secret": C({"src/bad_secret.ts": "export const " + SECRET_LINE}, {"secrets"}, GITLEAKS_FAILED),
-    "ratchet": C(baseline(3), {"ratchet"}, r"baseline grew"),
-    "ratchet-shrink": C(baseline(1), {"ratchet"}, must_pass=True),
-    # Text in a PR body must not be able to switch a gate off.
-    "ratchet-bypass": C(
-        baseline(3), {"ratchet"}, r"baseline grew", env={"PR_BODY": "[skip-ratchet]"}
     ),
     "dal-prisma": C(
         {
@@ -172,20 +141,40 @@ TS_CASES = {
     ),
     # Every DAL directory spelling the policy names is exempt.
     "dal-dir-exempt": C(
-        {
-            "src/data_access/users.ts": (
-                "declare const db: { query(sql: string): Promise<unknown> };\n"
-                'export const rows = db.query("select 1");\n'
-            )
-        },
+        {"src/data_access/users.ts": RAW_DB_DECL + 'export const rows = db.query("select 1");\n'},
         {"lint"},
         must_pass=True,
     ),
-    "env": C(
-        {"src/bad_env.ts": 'export const url = process.env["UNDECLARED_URL"];\n'},
-        {"env"},
-        r"UNDECLARED_URL",
+    # B24: inline config may not switch the DAL rule off.
+    "dal-inline-off": C(
+        {
+            "src/bad_inline.ts": (
+                "/* eslint @hardening/no-raw-db-client: off */\n"
+                + RAW_DB_DECL
+                + 'export const rows = db.query("select 1");\n'
+            )
+        },
+        {"lint"},
+        r"Inline config may not turn",
     ),
+    # Debt recorded on main (2 raw calls in src/legacy.ts) may only go down.
+    "debt-grow": C({"src/legacy.ts": legacy(3)}, {"lint"}, r"no-raw-db-client"),
+    "debt-shrink-unrecorded": C(
+        {"src/legacy.ts": legacy(1)}, {"lint"}, r"suppressions left that do not occur"
+    ),
+    "debt-shrink": C(
+        {"src/legacy.ts": legacy(1), "eslint-suppressions.json": suppressions(1)},
+        {"lint"},
+        must_pass=True,
+    ),
+    # B01: no text in a PR can switch a gate off.
+    "debt-bypass": C(
+        {"src/legacy.ts": legacy(3)},
+        {"lint"},
+        r"no-raw-db-client",
+        env={"PR_BODY": "[skip-ratchet]", "PR_TITLE": "[skip-ratchet]"},
+    ),
+    "secret": C({"src/bad_secret.ts": "export const " + SECRET_LINE}, {"secrets"}, GITLEAKS_FAILED),
     "test": C(
         {
             "test/bad.test.mjs": (
@@ -209,6 +198,12 @@ JS_CASES = {
         {"typecheck"},
         r"TS2322",
     ),
+    # B39: code outside src/ is type-checked too.
+    "types-root": C(
+        {"lib/bad_types.js": '/** @type {number} */\nexport const count = "three";\n'},
+        {"typecheck"},
+        r"TS2322",
+    ),
     "format": C({"src/bad_format.js": "export const   spaced =1\n"}, {"format"}, r"bad_format"),
     "dal": C(
         {
@@ -220,15 +215,18 @@ JS_CASES = {
         {"lint"},
         r"no-raw-db-client",
     ),
+    "secret": C({"src/bad_secret.js": "export const " + SECRET_LINE}, {"secrets"}, GITLEAKS_FAILED),
 }
 
 PY_CASES = {
-    "lint": C({"src/app/bad_lint.py": "import os\n"}, {"ruff"}, r"F401"),
-    "types": C({"src/app/bad_types.py": 'count: int = "three"\n'}, {"mypy"}, r"Incompatible types"),
+    "lint": C({"src/app/bad_lint.py": "import os\n"}, {"lint"}, r"F401"),
+    "types": C(
+        {"src/app/bad_types.py": 'count: int = "three"\n'}, {"types"}, r"Incompatible types"
+    ),
     "format": C({"src/app/bad_format.py": "x=1\n"}, {"format"}, r"bad_format"),
     "test": C(
         {"tests/test_bad.py": "def test_fails() -> None:\n    assert 1 == 2\n"},
-        {"pytest"},
+        {"test"},
         r"test_fails",
     ),
     "dal": C(
@@ -238,7 +236,7 @@ PY_CASES = {
                 '    return db.execute("select 1")\n'
             )
         },
-        {"pre-commit"},
+        {"semgrep"},
         r"no-raw-db-query-outside-dal",
     ),
     "secret": C({"src/app/bad_secret.py": SECRET_LINE}, {"secrets"}, GITLEAKS_FAILED),
@@ -247,7 +245,7 @@ PY_CASES = {
 GO_CASES = {
     "lint": C(
         {"bad_lint.go": 'package main\n\nimport "os"\n\nfunc cleanup() {\n\tos.Remove("x")\n}\n'},
-        {"golangci-lint"},
+        {"lint"},
         r"errcheck",
     ),
     "types": C(
@@ -273,7 +271,7 @@ GO_CASES = {
                 'func rows(db *sql.DB) error {\n\t_, err := db.Query("select 1")\n\treturn err\n}\n'
             )
         },
-        {"golangci-lint", "pre-commit"},
+        {"lint", "semgrep"},
         r"raw DB query outside dal|no-raw-db-query-outside-dal",
     ),
     "secret": C(
@@ -281,108 +279,122 @@ GO_CASES = {
     ),
 }
 
-PRE_COMMIT_ALL: GateStep = (
-    "pre-commit",
-    ["pre-commit", "run", "--all-files", "--show-diff-on-failure"],
-    "",
-)
 NPM_INSTALL = cmd("npm", "install", "--no-audit", "--no-fund")
-GITLEAKS: GateStep = ("secrets", ["gitleaks", "git", "--no-banner", "--redact", "."], "")
-# hardening-polyglot.yml's secrets job. (The pre-commit gitleaks hook scans
-# staged changes only, so `pre-commit run --all-files` cannot stand in for it.)
-GITLEAKS_POLYGLOT: GateStep = (
+SECRETS: GateStep = (
     "secrets",
     ["gitleaks", "git", "--no-banner", "--redact", "--config", ".gitleaks.toml", "."],
     "",
 )
+SEMGREP: GateStep = (
+    "semgrep",
+    ["semgrep", "scan", "--config", ".semgrep/hardening.yml", "--error", "--metrics", "off"],
+    "",
+)
+HOOKS: GateStep = (
+    "hooks",
+    ["pre-commit", "run", "--all-files", "--show-diff-on-failure"],
+    "",
+)
 
 
-def node_gate(*extra: GateStep) -> list[GateStep]:
-    """The steps hardening-node.yml runs, in order."""
+def node_gate() -> list[GateStep]:
+    """The steps hardening.yml's node job runs (via npm run check), one by one."""
     return [
+        ("entry:check", ["npm", "run", "check"], ""),
         ("format", ["npm", "run", "format:check"], ""),
         ("lint", ["npm", "run", "lint"], ""),
         ("typecheck", ["npm", "run", "typecheck"], ""),
-        *extra,
-        ("env", ["bash", ".github/scripts/check-env-schema.sh"], ""),
         ("test", ["npm", "test"], ""),
-        GITLEAKS,
+        SECRETS,
+        HOOKS,
     ]
 
+
+def py_gate() -> list[GateStep]:
+    return [
+        # hardening.yml installs with --locked: a stale uv.lock fails.
+        ("deps", ["uv", "sync", "--locked", "--quiet"], ""),
+        ("entry:check", ["uv", "run", "poe", "check"], ""),
+        ("format", ["uv", "run", "ruff", "format", "--check", "."], ""),
+        ("lint", ["uv", "run", "ruff", "check", "."], ""),
+        ("types", ["uv", "run", "mypy", "."], ""),
+        ("test", ["uv", "run", "poe", "test"], ""),
+    ]
+
+
+# The mono repo's single workflow must carry a job for each stack.
+CI_HAS_BOTH = (
+    "import pathlib, sys; t = pathlib.Path('.github/workflows/hardening.yml').read_text(); "
+    "sys.exit(0 if '\\n  node:' in t and '\\n  python:' in t else 1)"
+)
+
+TS_SETUP_DEBT = [
+    write({"src/legacy.ts": legacy(2)}),
+    cmd("npx", "eslint", "--suppress-all", "."),
+]
 
 STACKS: dict[str, Stack] = {
     "ts": Stack(
         fixture="ts",
-        setup=[install("ts"), merge_package_snippet(), NPM_INSTALL, write(LEGACY_DEBT)],
-        gate=node_gate(("ratchet", ["bash", ".github/scripts/check-baseline-shrinkage.sh"], "")),
-        tools=["node", "npm", "bash", "gitleaks"],
+        setup=[copier_copy(["ts"], code_owners="@example/maintainers"), *TS_SETUP_DEBT],
+        gate=node_gate(),
+        tools=["node", "npm", "npx", "gitleaks", "copier", "pre-commit"],
         cases=TS_CASES,
     ),
     "js": Stack(
         fixture="js",
-        setup=[install("js"), merge_package_snippet(), NPM_INSTALL],
+        setup=[copier_copy(["js"])],
         gate=node_gate(),
-        tools=["node", "npm", "bash", "gitleaks"],
+        tools=["node", "npm", "gitleaks", "copier", "pre-commit"],
         cases=JS_CASES,
     ),
     "python": Stack(
         fixture="python",
-        setup=[install("python"), append_pyproject_snippet(), cmd("uv", "lock", "--quiet")],
-        gate=[
-            # hardening-python.yml installs with --locked: a stale uv.lock fails.
-            ("deps", ["uv", "sync", "--locked", "--quiet"], ""),
-            ("ruff", ["uv", "run", "ruff", "check", "."], ""),
-            ("format", ["uv", "run", "ruff", "format", "--check", "."], ""),
-            ("mypy", ["uv", "run", "mypy", "."], ""),
-            ("pytest", ["uv", "run", "pytest", "-q"], ""),
-            PRE_COMMIT_ALL,
-            GITLEAKS_POLYGLOT,
-        ],
-        tools=["uv", "bash", "git", "gitleaks"],
+        setup=[copier_copy(["python"])],
+        gate=[*py_gate(), SEMGREP, SECRETS, HOOKS],
+        tools=["uv", "git", "gitleaks", "copier", "pre-commit", "semgrep"],
         cases=PY_CASES,
     ),
     "go": Stack(
         fixture="go",
-        setup=[
-            install("go"),
-            set_go_module_prefix("example.com/fixture"),
-            cmd("go", "get", "github.com/quasilyte/go-ruleguard/dsl@v0.3.23"),
-            cmd("go", "mod", "tidy"),  # B25: must keep the DSL that rules.go imports
-        ],
+        setup=[copier_copy(["go"], go_module="example.com/fixture"), cmd("go", "mod", "tidy")],
         gate=[
+            # make is not on Windows runners; the steps below cover the same checks.
+            *([] if IS_WINDOWS else [("entry:check", ["make", "check"], "")]),
             ("build", ["go", "build", "./..."], ""),
             ("vet", ["go", "vet", "./..."], ""),
             ("test", ["go", "test", "./..."], ""),
             ("format", ["golangci-lint", "fmt", "--diff"], ""),
-            ("golangci-lint", ["golangci-lint", "run", "--new-from-rev=origin/main"], ""),
-            PRE_COMMIT_ALL,
-            GITLEAKS_POLYGLOT,
+            ("lint", ["golangci-lint", "run", "--new-from-rev=origin/main"], ""),
+            SEMGREP,
+            SECRETS,
+            HOOKS,
         ],
-        tools=["go", "golangci-lint", "bash", "git", "gitleaks"],
+        tools=[
+            "go",
+            "golangci-lint",
+            *([] if IS_WINDOWS else ["make"]),
+            "git",
+            "gitleaks",
+            "copier",
+            "pre-commit",
+            "semgrep",
+        ],
         cases=GO_CASES,
     ),
-    # A TS web package and a Python service in one repo, both variants at the root.
+    # A TS web app and a Python service in one repo, installed together.
     "mono": Stack(
         fixture="mono",
-        setup=[
-            install("ts"),
-            install("python"),
-            merge_package_snippet(),
-            append_pyproject_snippet(),
-            NPM_INSTALL,
-            cmd("uv", "sync", "--quiet"),
-        ],
+        setup=[copier_copy(["ts", "python"], modules=["format", "lint", "types", "secrets", "ci"])],
         gate=[
-            ("lint", ["npm", "run", "lint"], ""),
-            ("typecheck", ["npm", "run", "typecheck"], ""),
-            ("ruff", ["uv", "run", "ruff", "check", "."], ""),
-            ("mypy", ["uv", "run", "mypy", "."], ""),
-            ("ci-has-python", ["bash", "-c", "grep -l ruff .github/workflows/*.yml"], ""),
+            *[s for s in node_gate() if s[0] not in {"entry:check", "hooks"}],
+            *[s for s in py_gate() if s[0] != "entry:check"],
+            ("ci-has-both", [sys.executable, "-c", CI_HAS_BOTH], ""),
         ],
-        tools=["node", "npm", "uv", "bash"],
+        tools=["node", "npm", "uv", "gitleaks", "copier"],
         cases={
             "ts-lint": TS_CASES["lint"],
-            "py-lint": C({"services/api/bad_lint.py": "import os\n"}, {"ruff"}, r"F401"),
+            "py-lint": C({"services/api/bad_lint.py": "import os\n"}, {"lint"}, r"F401"),
         },
     ),
 }
@@ -391,7 +403,7 @@ STACKS: dict[str, Stack] = {
 def run_gate(
     stack: Stack, repo: Repo, only: set[str] | None = None, env: dict[str, str] | None = None
 ) -> dict[str, str]:
-    """Run gate steps (all, or only those labelled in `only`).
+    """Run gate steps: all (clean run), or only those labelled in `only`.
 
     Returns {label: output tail} for each step that failed.
     """
