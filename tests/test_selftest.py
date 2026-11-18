@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 from harness import Repo, make_repo, publish_main, tool
-from known_bugs import CLEAN_RED, expected_case
+from known_bugs import expected_case, expected_clean
 from stacks import STACKS, caught, run_gate
 
 Installed = tuple[str, Repo, dict[str, str]]
@@ -64,7 +64,7 @@ def test_gate(installed: Installed, case: str) -> None:
     stack = STACKS[stack_name]
 
     if case == "clean":
-        expected = CLEAN_RED.get(stack_name, {})
+        expected = expected_clean(stack_name)
         unexpected = {k: v for k, v in clean_failures.items() if k not in expected}
         fixed = sorted(set(expected) - set(clean_failures))
         assert not unexpected, "steps red on a clean install that no known bug explains:\n" + (

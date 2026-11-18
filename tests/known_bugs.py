@@ -41,11 +41,23 @@ CASES: dict[tuple[str, str], tuple[str, str]] = {
     ("mono", "ts-lint"): ("blocked", "B09"),
 }
 
-# Platform-specific overrides: key (sys.platform prefix, stack, case).
-CASES_PLATFORM: dict[tuple[str, str, str], tuple[str, str]] = {
-    # node resolves Git Bash's /tmp to C:\tmp, so main's baseline reads as 0.
-    ("win", "ts", "ratchet-shrink"): ("false-alarm", "B34"),
+# Platform-specific overrides. B34: on Windows the ratchet's node reads Git
+# Bash's /tmp as C:\tmp, so main's baseline is 0 and the clean repo is red.
+CLEAN_RED_PLATFORM: dict[tuple[str, str], dict[str, str]] = {
+    ("win", "ts"): {"lint": "B09", "ratchet": "B34"},
 }
+CASES_PLATFORM: dict[tuple[str, str, str], tuple[str, str]] = {
+    ("win", "ts", "ratchet"): ("blocked", "B34"),
+    ("win", "ts", "ratchet-shrink"): ("blocked", "B34"),
+    ("win", "ts", "ratchet-bypass"): ("blocked", "B34"),
+}
+
+
+def expected_clean(stack: str) -> dict[str, str]:
+    for (plat, s), red in CLEAN_RED_PLATFORM.items():
+        if sys.platform.startswith(plat) and s == stack:
+            return red
+    return CLEAN_RED.get(stack, {})
 
 
 def expected_case(stack: str, case: str, healthy: str) -> tuple[str, str]:
