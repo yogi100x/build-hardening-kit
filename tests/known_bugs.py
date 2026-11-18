@@ -24,7 +24,7 @@ CASES: dict[tuple[str, str], tuple[str, str]] = {
 # Platform-specific overrides. B34: on Windows the ratchet's node reads Git
 # Bash's /tmp as C:\tmp, so main's baseline is 0 and the clean repo is red.
 CLEAN_RED_PLATFORM: dict[tuple[str, str], dict[str, str]] = {
-    ("win", "ts"): {"lint": "B09", "ratchet": "B34"},
+    ("win", "ts"): {"ratchet": "B34"},
 }
 CASES_PLATFORM: dict[tuple[str, str, str], tuple[str, str]] = {
     ("win", "ts", "ratchet"): ("blocked", "B34"),
