@@ -1,9 +1,9 @@
 # Known bugs
 
-Every bug found in the kit, with an id. Ids are referenced from
-`tests/known_bugs.py`; a self-test case marked with an id is an expected
-failure until the bug is fixed. The fix removes the marker in the same change
-(the self-test fails on an unexpected pass).
+Every bug found in the kit, with an id. `tests/known_bugs.py` records the exact
+outcome each bug causes in the self-test (which step is red on a clean install,
+which planted case is blocked or missed). The self-test asserts those outcomes,
+so a fix must update the entry in the same change, and anything new fails.
 
 "Observed" = the self-test reproduces it today. "Review" = found by reading the
 code; it gets a self-test case when it is fixed.
@@ -35,7 +35,7 @@ code; it gets a self-test case when it is fixed.
 | B23 | Ratchet counts by position: a new call above old ones flags an old line | `no-raw-db-client.js` | Review |
 | B24 | `/* eslint @repo/no-raw-db-client: off */` bypasses `no-dal-disable` | `no-dal-disable.js` | Review |
 | B25 | `rules.go` is dropped by `go mod tidy` without a `tools.go` import, so ruleguard cannot load | `go/rules.go` | Review |
-| B26 | `make check` runs `gofmt -w` (writes); no format check in CI; `new-from-rev` set twice | `go/Makefile.snippet`, `go/.golangci.yml` | Review |
+| B26 | `make check` runs `gofmt -w` (writes); no format check in CI; `new-from-rev` set twice | `go/Makefile.snippet`, `go/.golangci.yml` | Observed |
 | B27 | `mirrors-prettier` is archived and pinned to an alpha | `polyglot/.pre-commit-config.yaml` | Review |
 | B28 | semgrep secret rule fires on tests and examples (no test-path exclude) | `polyglot/semgrep/rules.yml` | Review |
 | B29 | `pip install` without `setup-python` | `polyglot/ci.yml` | Review |
@@ -43,3 +43,4 @@ code; it gets a self-test case when it is fixed.
 | B31 | Node variants never check formatting in CI (Prettier only runs on staged files) | `shared/.github/workflows/ci.yml`, `*/package.snippet.json` | Observed |
 | B32 | TS/JS variants install no secret scanning | `install.sh` | Observed |
 | B33 | The CI snippet the kit installs fails the kit's own Prettier hook, so `pre-commit run --all-files` is red right after install | `install.sh`, `polyglot/.pre-commit-config.yaml` | Observed |
+| B34 | On Windows the ratchet reads main's baseline from `/tmp` through `node`, which resolves it to `C:\tmp`; main reads as 0, so lowering debt is refused | `check-baseline-shrinkage.sh` | Observed (Windows) |

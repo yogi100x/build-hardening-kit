@@ -1,44 +1,55 @@
-"""Known kit bugs, as observed by the self-test.
+"""Known kit bugs, as observed by the self-test. Ids are in KNOWN_BUGS.md.
 
-Key: (stack, case). Value: the bug id and a one-line reason (see
-tests/KNOWN_BUGS.md). Remove an entry in the same change that fixes the bug;
-the self-test fails on XPASS so a fix cannot land without updating this list.
+The self-test asserts these exact outcomes, so the list cannot go stale: a fix
+changes the outcome and the run fails until the entry here is updated in the
+same change, and a new break that is not listed fails straight away.
 """
 
 from __future__ import annotations
 
 import sys
 
-KNOWN: dict[tuple[str, str], str] = {
-    ("ts", "clean"): "B09 @repo/eslint-plugin not declared, lint cannot load",
-    ("ts", "lint"): "B09 lint red on clean",
-    ("ts", "dal"): "B09 lint red on clean",
-    ("ts", "format"): "B31 no format check in the Node gate",
-    ("ts", "secret"): "B32 ts variant has no secret scan",
-    ("ts", "ratchet-bypass"): "B01 [skip-ratchet] in PR text switches the ratchet off",
-    ("js", "clean"): "B09 plugin unresolvable; B17 checkJs type-checks the plugin",
-    ("js", "lint"): "B09 lint red on clean",
-    ("js", "dal"): "B09 lint red on clean",
-    ("js", "types"): "B17 typecheck red on clean",
-    ("js", "format"): "B31 no format check in the Node gate",
-    ("python", "clean"): "B33 installed CI snippet fails the kit's own prettier hook",
-    ("python", "dal"): "B33 pre-commit red on clean",
-    ("python", "secret"): "B33 pre-commit red on clean",
-    ("go", "clean"): "B04 golangci v1 config rejected by v2; v1.62.2 hook cannot read new Go; B33",
-    ("go", "lint"): "B04 golangci-lint red on clean",
-    ("go", "format"): "B04 golangci-lint red on clean; B26 no format check",
-    ("go", "dal"): "B04 golangci-lint and pre-commit red on clean",
-    ("go", "secret"): "B33 pre-commit red on clean",
-    ("mono", "clean"): "B09 plugin unresolvable; B19 second variant's CI file silently skipped",
-    ("mono", "ts-lint"): "B09 lint red on clean",
+# Gate steps expected to be red on the freshly installed, untouched repo.
+CLEAN_RED: dict[str, dict[str, str]] = {
+    "ts": {"lint": "B09"},
+    "js": {"lint": "B09", "typecheck": "B17"},
+    "python": {"pre-commit": "B33"},
+    "go": {"golangci-lint": "B04", "pre-commit": "B04 B33"},
+    "mono": {"lint": "B09", "ci-has-python": "B19"},
 }
 
-# Platform-specific entries: key (platform prefix, stack, case).
-KNOWN_PLATFORM: dict[tuple[str, str, str], str] = {}
+# Outcome of a planted case when it is not the healthy one. Outcomes:
+#   blocked     - no expected step is usable (absent from the gate, or red on clean)
+#   missed      - the change is planted and no expected step catches it
+#   false-alarm - a legitimate change (must_pass) is refused
+CASES: dict[tuple[str, str], tuple[str, str]] = {
+    ("ts", "lint"): ("blocked", "B09"),
+    ("ts", "dal"): ("blocked", "B09"),
+    ("ts", "format"): ("blocked", "B31"),
+    ("ts", "secret"): ("blocked", "B32"),
+    ("ts", "ratchet-bypass"): ("missed", "B01"),
+    ("js", "lint"): ("blocked", "B09"),
+    ("js", "dal"): ("blocked", "B09"),
+    ("js", "types"): ("blocked", "B17"),
+    ("js", "format"): ("blocked", "B31"),
+    ("python", "dal"): ("blocked", "B33"),
+    ("python", "secret"): ("blocked", "B33"),
+    ("go", "lint"): ("blocked", "B04"),
+    ("go", "format"): ("blocked", "B26"),
+    ("go", "dal"): ("blocked", "B04"),
+    ("go", "secret"): ("blocked", "B33"),
+    ("mono", "ts-lint"): ("blocked", "B09"),
+}
+
+# Platform-specific overrides: key (sys.platform prefix, stack, case).
+CASES_PLATFORM: dict[tuple[str, str, str], tuple[str, str]] = {
+    # node resolves Git Bash's /tmp to C:\tmp, so main's baseline reads as 0.
+    ("win", "ts", "ratchet-shrink"): ("false-alarm", "B34"),
+}
 
 
-def expected_failure(stack: str, case: str) -> str | None:
-    for (plat, s, c), reason in KNOWN_PLATFORM.items():
+def expected_case(stack: str, case: str, healthy: str) -> tuple[str, str]:
+    for (plat, s, c), outcome in CASES_PLATFORM.items():
         if sys.platform.startswith(plat) and (s, c) == (stack, case):
-            return reason
-    return KNOWN.get((stack, case))
+            return outcome
+    return CASES.get((stack, case), (healthy, ""))

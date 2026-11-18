@@ -24,6 +24,15 @@ IS_WINDOWS = sys.platform == "win32"
 REQUIRE_TOOLS = os.environ.get("BHK_REQUIRE_TOOLS") == "1"
 
 
+# Python-distributed tools fetched with uvx when not installed, pinned so a PR
+# run does not pick up whatever was released that day (nightly runs catch drift).
+UVX_PINS = {
+    "pre-commit": "pre-commit@4.7.0",
+    "semgrep": "semgrep@1.186.0",
+    "zizmor": "zizmor@1.32.0",
+}
+
+
 @dataclass
 class Result:
     code: int
@@ -39,8 +48,8 @@ def tool(name: str) -> list[str]:
     found = shutil.which(name)
     if found:
         return [found]
-    if name in {"pre-commit", "semgrep", "zizmor", "copier"} and shutil.which("uvx"):
-        return [shutil.which("uvx") or "uvx", name]
+    if name in UVX_PINS and shutil.which("uvx"):
+        return [shutil.which("uvx") or "uvx", UVX_PINS[name]]
     msg = f"required tool not found: {name}"
     if REQUIRE_TOOLS:
         pytest.fail(msg)
@@ -49,7 +58,9 @@ def tool(name: str) -> list[str]:
 
 
 def run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None, timeout: int = 900) -> Result:
-    full_env = {**os.environ, "TZ": "UTC", "CI": "1", **(env or {})}
+    # PR_* would leak a developer's own PR text into the ratchet; drop it.
+    base = {k: v for k, v in os.environ.items() if not k.startswith("PR_")}
+    full_env = {**base, "TZ": "UTC", "CI": "1", **(env or {})}
     proc = subprocess.run(
         cmd,
         cwd=cwd,
@@ -87,6 +98,7 @@ class Repo:
 
     def plant(self, files: dict[str, str]) -> None:
         """Put a violation on a `pr` branch, as a pull request would."""
+        self.reset()  # hooks may have rewritten files during an earlier run
         git(self.path, "checkout", "-q", "-B", "pr", "main")
         for rel, content in files.items():
             self.write(rel, content)
@@ -94,7 +106,8 @@ class Repo:
 
     def reset(self) -> None:
         git(self.path, "checkout", "-q", "-f", "main")
-        git(self.path, "clean", "-q", "-fd", "-e", "node_modules", "-e", ".venv")
+        # -x also drops ignored caches (.mypy_cache, .ruff_cache); keep installs.
+        git(self.path, "clean", "-q", "-fdx", "-e", "node_modules", "-e", ".venv")
 
 
 def make_repo(fixture: str, dest: Path) -> Repo:

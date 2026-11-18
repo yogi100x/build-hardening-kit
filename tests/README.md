@@ -8,10 +8,15 @@ and a `mono` repo with TypeScript and Python together) the self-test:
 2. installs the kit the way the README tells a user to;
 3. runs the stack's gate (the commands the kit documents) and expects it to
    **pass** on the clean repo;
-4. plants one violation at a time on a `pr` branch (lint, types, format,
-   tests, raw DB query, secret, ratchet growth) and expects the step that
-   should catch it to **fail**. A step that is already red on the clean repo
-   cannot prove anything, so the case fails rather than passing by accident.
+4. plants one change at a time on a `pr` branch and checks the outcome:
+   - a violation (lint, types, format, tests, raw DB query, secret, debt
+     growth, a `[skip-ratchet]` bypass attempt) must make the step meant to
+     catch it **fail**, with that rule's own id or message in the output, so a
+     crash or an unrelated rule never counts as caught;
+   - a legitimate change (debt going down) must **pass**.
+
+   A step already red on the clean repo cannot prove anything, so such a case
+   is reported as `blocked`, never as caught.
 
 ## Run it
 
@@ -30,13 +35,15 @@ within a day (`.github/workflows/self-test.yml`).
 
 ## Known bugs
 
-`KNOWN_BUGS.md` lists every bug with an id; `known_bugs.py` marks the cases
-that fail because of one. Those cases are expected failures. When a fix makes
-one pass, the run fails (strict xfail) until the marker is removed in the
-same change, so the list always matches reality.
+`KNOWN_BUGS.md` lists every bug with an id; `known_bugs.py` records the exact
+outcome each one causes today (steps red on a clean install; cases `blocked`,
+`missed` or `false-alarm`). The self-test asserts those outcomes. When a fix
+changes one, the run fails until the entry is updated in the same change, and
+an outcome nobody recorded fails at once, so the list always matches reality.
 
 ## Adding a stack or a check
 
 Add a fixture under `tests/fixtures/<stack>/`, then a `Stack` entry in
 `stacks.py`: setup steps, gate steps (label, command, directory), and the
-violations with the gate label expected to catch each.
+cases with the gate labels expected to react and the message that proves the
+right rule fired.
