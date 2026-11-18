@@ -21,7 +21,12 @@ RENDERS = {
     "ts-py-go-all": (["ts", "python", "go"], ALL, {"go_module": "example.com/x"}),
     "js-all": (["js"], ALL, {}),
     "py-owners": (["python"], ALL, {"code_owners": "@acme/core"}),
-    "go-solo": (["go"], ALL, {"code_owners": "@me", "required_reviews": "0"}),
+    "go-solo": (
+        ["go"],
+        ALL,
+        {"code_owners": "@me", "required_reviews": "0", "require_codeql": "true"},
+    ),
+    "py-gov-no-ci": (["python"], ["secrets", "governance", "agents"], {}),
     "ts-minimal": (["ts"], None, {"preset": "minimal"}),
     "ts-pnpm": (["ts"], None, {"node_package_manager": "pnpm"}),
     "py-ci-only": (["python"], ["secrets", "ci"], {}),
@@ -247,23 +252,75 @@ def protection(root: Path) -> dict:
     return json.loads(res.out)
 
 
-def reported_checks(root: Path) -> set[str]:
+def job_check_names(job_id: str, job: dict) -> set[str]:
+    """Names GitHub reports for a job: its `name` (else its id), with
+    ${{ matrix.x }} expanded for every matrix value."""
+    name = job.get("name", job_id)
+    matrix = (job.get("strategy") or {}).get("matrix") or {}
+    out = {name}
+    for key, values in matrix.items():
+        if isinstance(values, list):
+            token = "${{ matrix." + key + " }}"
+            out = {n.replace(token, str(v)) for n in out for v in values}
+    return out
+
+
+def reported_checks(root: Path, include_codeql: bool) -> set[str]:
     """Check names GitHub will report for the rendered workflows."""
-    names = set(load(root / ".github/workflows/hardening.yml")["jobs"])
-    codeql = load(root / ".github/workflows/codeql.yml")["jobs"]["analyze"]
-    names |= {f"Analyze ({lang})" for lang in codeql["strategy"]["matrix"]["language"]}
+    names: set[str] = set()
+    files = ["hardening.yml"] + (["codeql.yml"] if include_codeql else [])
+    for file in files:
+        path = root / ".github/workflows" / file
+        if path.exists():
+            for job_id, job in load(path)["jobs"].items():
+                names |= job_check_names(job_id, job)
     return names
 
 
-@pytest.mark.parametrize("name", ["ts-py-go-all", "js-all", "py-owners", "go-solo"])
+@pytest.mark.parametrize(
+    ("name", "codeql"),
+    [
+        ("ts-py-go-all", False),
+        ("js-all", False),
+        ("py-owners", False),
+        ("go-solo", True),
+        ("py-gov-no-ci", False),
+    ],
+)
 def test_branch_protection_requires_exactly_the_real_checks(
-    rendered: dict[str, Path], name: str
+    rendered: dict[str, Path], name: str, codeql: bool
 ) -> None:
     """A required check that never reports would block every merge forever."""
     root = rendered[name]
     body = protection(root)
-    assert set(body["required_status_checks"]["contexts"]) == reported_checks(root)
+    assert set(body["required_status_checks"]["contexts"]) == reported_checks(root, codeql)
     assert body["allow_force_pushes"] is False and body["enforce_admins"] is True
+
+
+def test_protect_branch_arguments(rendered: dict[str, Path]) -> None:
+    """Review finding: `owner/repo --dry-run` ran the real change."""
+    root = rendered["py-owners"]
+    script = [*tool("bash"), ".github/hardening/protect-branch.sh"]
+    res = run([*script, "acme/app", "--dry-run"], root)
+    assert res.ok and '"contexts"' in res.out, res.out
+    res = run([*script, "--dry-rn"], root)
+    assert res.code == 2 and "unknown option" in res.out
+
+
+def test_workflows_run_in_merge_queue(rendered: dict[str, Path]) -> None:
+    """Required checks must also report in a merge queue, or the queue deadlocks."""
+    root = rendered["ts-py-go-all"]
+    for file in ("hardening.yml", "codeql.yml"):
+        on = load(root / ".github/workflows" / file)[True]  # YAML 1.1 reads `on` as True
+        assert "merge_group" in on, file
+
+
+def test_agents_md_names_only_real_commands(rendered: dict[str, Path]) -> None:
+    """Review finding: AGENTS.md listed `poe check` with no check modules."""
+    text = (rendered["py-gov-no-ci"] / "AGENTS.md").read_text(encoding="utf-8")
+    assert "poe check" not in text and "`uv run poe test`" in text
+    full = (rendered["ts-py-go-all"] / "AGENTS.md").read_text(encoding="utf-8")
+    assert "`make check` — formatting, lint, types, vet, build" in full
 
 
 def test_branch_protection_review_settings(rendered: dict[str, Path]) -> None:

@@ -8,15 +8,19 @@ Created by build-hardening-kit; yours to edit.
 Run the gate. CI runs exactly these commands, so green here means green there.
 
 [% if node %]
+[% if gate_parts %]
 - `npm run check` — [[ gate_parts ]]
+[% endif %]
 - `npm test`
 [% endif %]
 [% if py %]
+[% if gate_parts %]
 - `uv run poe check` — [[ gate_parts ]]
+[% endif %]
 - `uv run poe test`
 [% endif %]
 [% if go %]
-- `make check` — [[ gate_parts ]], vet, build
+- `make check` — [[ (([gate_parts] if gate_parts else []) + ['vet', 'build']) | join(', ') ]]
 - `make test`
 [% endif %]
 

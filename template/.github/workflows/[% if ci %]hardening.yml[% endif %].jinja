@@ -4,6 +4,7 @@ name: hardening
 
 on:
   pull_request:
+  merge_group: # report in a merge queue too, or required checks never arrive
   push:
     branches: ["[[ default_branch ]]"]
 

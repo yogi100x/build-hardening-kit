@@ -114,6 +114,15 @@ code_owners:
   when: "[[ 'governance' in modules ]]"
   default: ""
 
+require_codeql:
+  type: bool
+  help: >-
+    Also require the CodeQL scan to pass before merging? Only if CodeQL can run
+    here: free on public repos; private repos need GitHub Code Security, or the
+    check fails on every pull request and blocks all merges.
+  when: "[[ 'governance' in modules ]]"
+  default: false
+
 required_reviews:
   type: int
   help: >-
@@ -213,5 +222,5 @@ required_checks:
        + (['semgrep'] if ci and semgrep else [])
        + ((['Analyze (javascript-typescript)'] if node else [])
           + (['Analyze (python)'] if py else []) + (['Analyze (go)'] if go else [])
-          + ['Analyze (actions)'] if governance else [])) | tojson ]]
+          + ['Analyze (actions)'] if governance and require_codeql else [])) | tojson ]]
   when: false

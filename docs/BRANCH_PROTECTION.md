@@ -15,13 +15,22 @@ remove stacks and modules.
 .github/hardening/protect-branch.sh             # apply to this repo's default branch
 ```
 
+The call replaces the branch's whole protection. If required checks are set
+today that are not the kit's, the script stops and lists them; re-run with
+`--replace` to drop them, or add them back by hand afterwards.
+
+CodeQL is not a required check unless you answered `require_codeql: true`.
+CodeQL is free on public repos; on a private repo without GitHub Code Security
+the scan fails on every pull request, and a required failing check blocks all
+merges.
+
 Needs the GitHub CLI (`gh`) signed in with admin rights on the repo. Branch
 protection on a private repo needs a paid GitHub plan; public repos are free.
 
 | Setting | Why |
 |---|---|
-| required status checks | every kit job (and each CodeQL language) must pass |
-| `strict: false` | a branch need not be rebased on the latest base first; turn it on (or add a merge queue) once "green on my branch, red on main" happens often |
+| required status checks | every kit job must pass (and each CodeQL language, if `require_codeql`) |
+| `strict: false` | a branch need not be rebased on the latest base first; turn it on, or add a merge queue (the kit's workflows run on `merge_group`), once "green on my branch, red on main" happens often |
 | `enforce_admins` | the rules apply to admins too |
 | approving reviews | `required_reviews` (default 1). Working alone? Set it to 0: GitHub does not let you approve your own pull request |
 | code-owner review | only when you named real owners (`code_owners`); a placeholder owner silently enforces nothing |
